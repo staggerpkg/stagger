@@ -6,8 +6,8 @@ import random
 import warnings
 import sys
 
-warnings.simplefilter("always", id3.Warning)
-#warnings.simplefilter("error", id3.Warning)
+warnings.simplefilter("always", tag3.Warning)
+#warnings.simplefilter("error", tag3.Warning)
 
 w1 = r"C:\Users\lorentey\Music"
 w2 = r"S:\Music"
@@ -44,16 +44,11 @@ def test(*roots, wait=False, randomize=False, limit=None, catch_errors=True):
     for mp3 in head(mp3s, limit):
         try:
             print(mp3)
-            with id3.read(mp3) as tag:
+            with tag3.read(mp3) as tag:
                 print(tag)
-                last = None
                 for frame in tag.frames():
-                    #if type(frame) in [id3.ErrorFrame, id3.UnknownFrame]:
-                    #    if last != mp3:
-                    #        print(mp3)
-                    #        last = mp3
                     print("    " + str(frame))
-        except id3.NoTagError:
+        except tag3.NoTagError:
             pass
         except Exception as e:
             if catch_errors:
@@ -62,3 +57,12 @@ def test(*roots, wait=False, randomize=False, limit=None, catch_errors=True):
                 raise
         if wait: input()
 
+def test_encode(file):
+    with tag3.read(file) as tag:
+        print(tag)
+        for frame in tag.frames():
+            print(" " + str(frame))
+            data = tag._encode_one_frame(frame)
+            print("    ==> {0}/{1}{2}".format(len(data),
+                                              data[:30],
+                                              "..." if len(data) > 30 else ""))
