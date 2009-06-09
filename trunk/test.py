@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import id3
+import tag3
 import os
 import random
 import warnings
@@ -9,8 +9,6 @@ import sys
 warnings.simplefilter("always", id3.Warning)
 #warnings.simplefilter("error", id3.Warning)
 
-
-#start = r"S:\Music\Instrumental\Mike Oldfield - 1998 Tubular Bells III"
 w1 = r"C:\Users\lorentey\Music"
 w2 = r"S:\Music"
 root3 = r"."
