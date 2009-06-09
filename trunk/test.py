@@ -7,6 +7,8 @@ import warnings
 import sys
 
 warnings.simplefilter("always", id3.Warning)
+#warnings.simplefilter("error", id3.Warning)
+
 
 #start = r"S:\Music\Instrumental\Mike Oldfield - 1998 Tubular Bells III"
 w1 = r"C:\Users\lorentey\Music"
@@ -33,7 +35,7 @@ def head(iterable, limit):
         for elem, i in zip(iterable, range(limit)):
             yield elem
 
-def test(*roots, wait=False, randomize=False, limit=None):
+def test(*roots, wait=False, randomize=False, limit=None, catch_errors=True):
     mp3s = list_mp3s(roots)
 
     if randomize:
@@ -56,6 +58,9 @@ def test(*roots, wait=False, randomize=False, limit=None):
         except id3.NoTagError:
             pass
         except Exception as e:
-            print("{0}: {1} {2}".format(mp3, type(e).__name__, str(e)))
+            if catch_errors:
+                print("{0}: {1} {2}".format(mp3, type(e).__name__, str(e)))
+            else:
+                raise
         if wait: input()
 
