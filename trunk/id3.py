@@ -727,7 +727,7 @@ class URLStringSpec(Spec):
         rawstr, sep, data = data.partition(b"\x00")
         if len(rawstr) == 0 and len(data) > 0:
             # iTunes prepends an extra null byte to WFED frames (encoding spec?)
-            warn("Frame {0} includes a text encoding byte".format(frame.frameid), Warning)
+            #warn("Frame {0} includes a text encoding byte".format(frame.frameid), Warning)
             rawstr, sep, data = data.partition(b"\x00")
         return rawstr.decode('iso-8859-1'), data
     def write(self, frame, value):
@@ -1484,6 +1484,7 @@ class LNK(Frame):
 
 # Nonstandard frames
 class TCMP(TextFrame): "iTunes: Part of a compilation"
+class TCP(TCMP): pass
 
 class TDES(TextFrame): "iTunes: Podcast description"
 class TDS(TDES): pass
@@ -1500,7 +1501,9 @@ class WFD(WFED): pass
 class TCAT(TextFrame): "iTunes: Podcast category"
 class TCT(TCAT): pass
 
-class TKWD(TextFrame): "iTunes: Podcast keywords"
+class TKWD(TextFrame): 
+    """iTunes: Podcast keywords
+    Comma-separated list of keywords."""
 class TKW(TKWD): pass
 
 class PCST(Frame):
