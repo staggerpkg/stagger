@@ -29,41 +29,27 @@ def xread(file, length):
         raise EOFError
     return data
 
-def tuples_across(iterable, width):
-    l = list([None] * width)
-    empty = True
-    for elem in iterable:
-        empty = False
-        l[0:width-1] = l[1:]
-        l[-1] = elem
-        yield tuple(l)
-    if not empty:
-        for i in range(width - 1):
-            l[0:width-1] = l[1:]
-            l[-1] = None
-            yield tuple(l)
-
 class Unsync:
     @staticmethod
     def gen_decode(iterable):
-        for t in tuples_across(iterable, 2):
-            if t[1] is None:
-                continue # Ending tuples
-            if t[0] == 0xFF:
-                if t[1] == 0x00:
-                    continue # Skip sync char
-                if t[1] & 0xE0:
-                    warn("Invalid unsynched data", Warning)
-            yield t[1]
+        sync = False
+        for b in iterable:
+            if sync and b & 0xE0:
+                warn("Invalid unsynched data", Warning)
+            if not (sync and b == 0x00):
+                yield b
+            sync = (b == 0xFF)
 
     @staticmethod
     def gen_encode(data):
-        for t in tuples_across(data, 2):
-            if t[0] is None:
-                continue # Beginning tuples
-            yield t[0]
-            if t[0] == 0xFF and (t[1] is None or t[1] == 0x00 or t[1] & 0xE0):
+        sync = False
+        for b in data:
+            if sync and (b == 0x00 or b & 0xE0):
                 yield 0x00 # Insert sync char
+            yield b
+            sync = (b == 0xFF)
+        if sync:
+            yield 0x00 # Data ends on 0xFF
 
     @staticmethod
     def decode(data):
