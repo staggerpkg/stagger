@@ -165,7 +165,10 @@ class Tag(metaclass=abc.ABCMeta):
     
     @abstractmethod
     def _read_one_frame(self): pass
-    
+
+    @abstractmethod
+    def _encode_one_frame(self, frame): pass
+
     def frames(self):
         self._reset()
         fp = self._fp_frames_start
@@ -241,7 +244,31 @@ class Tag22(Tag):
         except Exception as e:
             return ErrorFrame(frameid, data, e)
 
+    def _encode_one_frame(self):
+        framedata = frame._to_data()
+
+        data = bytearray()
+        # Frame id
+        if len(frame.frameid) != 3 or not self._is_frame_id(frame.frameid):
+            raise "Invalid ID3v2.2 frame id {0}".format(repr(frame.frameid))
+        data.extend(frame.frameid.encode("ASCII"))
+        # Size
+        data.extend(Int8.encode(len(framedata), 3))
+        assert(len(data) == 6)
+        data.extend(framedata)
+        return data
+
 class Tag23(Tag):
+    __FRAME23_FORMAT_COMPRESSED = 0x0080
+    __FRAME23_FORMAT_ENCRYPTED = 0x0040
+    __FRAME23_FORMAT_GROUP = 0x0020
+    __FRAME23_FORMAT_UNKNOWN_MASK = 0x001F
+
+    __FRAME23_STATUS_DISCARD_ON_TAG_ALTER = 0x8000
+    __FRAME23_STATUS_DISCARD_ON_FILE_ALTER = 0x4000
+    __FRAME23_STATUS_READ_ONLY = 0x2000
+    __FRAME23_STATUS_UNKNOWN_MASK = 0x1F00
+
     def __init__(self, file):
         self.version = 3
         super().__init__(file)
@@ -287,25 +314,25 @@ class Tag23(Tag):
     def __interpret_frame_flags(self, frameid, b, data):
         flags = {}
         # Frame encoding flags
-        if b & 0x1F00:
+        if b & self.__FRAME23_FORMAT_UNKNOWN_MASK:
             raise FrameError("Invalid ID3v2.3 frame encoding flags: 0x{0:X}".format(b))
-        if b & 0x8000:
+        if b & self.__FRAME23_FORMAT_COMPRESSED:
             flags["compressed"] = True
             expanded_size = Int8.decode(data[0:4])
             data = zlib.decompress(data[4:], expanded_size)
-        if b & 0x4000:
+        if b & self.__FRAME23_FORMAT_ENCRYPTED:
             raise FrameError("Can't read ID3v2.3 encrypted frames")
-        if b & 0x2000:
+        if b & self.__FRAME23_FORMAT_GROUP:
             flags["group"] = data[0]
             data = data[1:]
         # Frame status messages
-        if b & 0x0080:
+        if b & self.__FRAME23_STATUS_DISCARD_ON_TAG_ALTER:
             flags["discard_on_tag_alter"] = True
-        if b & 0x0040:
+        if b & self.__FRAME23_STATUS_DISCARD_ON_FILE_ALTER:
             flags["discard_on_file_alter"] = True
-        if b & 0x0020:
+        if b & self.__FRAME23_STATUS_READ_ONLY:
             flags["read_only"] = True
-        if b & 0x001F:
+        if b & self.__FRAME23_STATUS_UNKNOWN_MASK:
             warn("Unexpected status flags on {0} frame: 0x{1:X}".format(frameid, b), Warning)
         return flags, data
             
@@ -325,9 +352,63 @@ class Tag23(Tag):
         except Exception as e:
             return ErrorFrame(frameid, data, e)
 
+    def _encode_one_frame(self, frame):
+        framedata = frame._to_data()
+        origlen = len(framedata)
+
+        flagval = 0
+        frameinfo = bytearray()
+        if frame.flags.get("compressed"):
+            framedata = zlib.compress(framedata)
+            flagval |= self.__FRAME23_FORMAT_COMPRESSED
+            frameinfo.extend(Int8.encode(origlen, 4))
+        if type(frame.flags.get("group")) == Integer:
+            frameinfo.append(frame.flags["group"])
+            flagval |= self.__FRAME23_FORMAT_GROUP
+        if frame.flags.get("discard_on_tag_alter"):
+            flagval |= self.__FRAME23_STATUS_DISCARD_ON_TAG_ALTER
+        if frame.flags.get("discard_on_file_alter"):
+            flagval |= self.__FRAME23_STATUS_DISCARD_ON_FILE_ALTER
+        if frame.flags.get("read_only"):
+            flagval |= self.__FRAME23_STATUS_READ_ONLY
+        
+        data = bytearray()
+        # Frame id
+        if len(frame.frameid) != 4 or not self._is_frame_id(frame.frameid):
+            raise "Invalid ID3v2.3 frame id {0}".format(repr(frame.frameid))
+        data.extend(frame.frameid.encode("ASCII"))
+        # Size
+        data.extend(Int8.encode(len(frameinfo) + len(framedata), 4))
+        # Flags
+        data.extend(Int8.encode(flagval, 2))
+        assert len(data) == 10
+        # Format info
+        data.extend(frameinfo)
+        # Frame data
+        data.extend(framedata)
+        return data
+
 class Tag24(Tag):
     ITUNES_WORKAROUND = False
-    
+
+    __TAG24_UNSYNCHRONISED = 0x80
+    __TAG24_EXTENDED_HEADER = 0x40
+    __TAG24_EXPERIMENTAL = 0x20
+    __TAG24_FOOTER = 0x10
+    __TAG24_UNKNOWN_MASK = 0x0F
+
+    __FRAME24_FORMAT_GROUP = 0x0040
+    __FRAME24_FORMAT_COMPRESSED = 0x0008
+    __FRAME24_FORMAT_ENCRYPTED = 0x0004
+    __FRAME24_FORMAT_UNSYNCHRONISED = 0x0002
+    __FRAME24_FORMAT_DATA_LENGTH_INDICATOR = 0x0001
+    __FRAME24_FORMAT_UNKNOWN_MASK = 0xB000
+
+    __FRAME24_STATUS_DISCARD_ON_TAG_ALTER = 0x4000
+    __FRAME24_STATUS_DISCARD_ON_FILE_ALTER = 0x2000
+    __FRAME24_STATUS_READ_ONLY = 0x1000
+    __FRAME24_STATUS_UNKNOWN_MASK = 0x8F00
+
     def __init__(self, file):
         self.version = 4
         super().__init__(file)
@@ -335,15 +416,15 @@ class Tag24(Tag):
         header = xread(file, 10)
         if header[0:5] != b"ID3\x04\x00":
             raise TagError("ID3v2.4 header not found")
-        if header[5] & 128:
+        if header[5] & self.__TAG24_UNSYNCHRONISED:
             self.flags.add("unsynchronisation")
-        if header[5] & 64:
+        if header[5] & self.__TAG24_EXTENDED_HEADER:
             self.flags.add("extended_header")
-        if header[5] & 32:
+        if header[5] & self.__TAG24_EXPERIMENTAL:
             self.flags.add("experimental")
-        if header[5] & 16:
+        if header[5] & self.__TAG24_FOOTER:
             self.flags.add("footer")
-        if header[5] & 15:
+        if header[5] & self.__TAG24_UNKNOWN_MASK:
             warn("Unknown ID3v2.4 flags", Warning)
         self.size = Syncsafe.decode(header[6:10])
         if "extended_header" in self.flags:
@@ -381,13 +462,13 @@ class Tag24(Tag):
             if numflags != 1:
                 warn("Unexpected number of ID3v2.4 extended flag bytes: {0}".format(numflags), Warning)
             flags = xread(self.file, numflags)[0]
-            if flags & 64:
+            if flags & 0x40:
                 self.flags.add("ext:update")
                 self.__read_extended_header_flag_data()
-            if flags & 32:
+            if flags & 0x20:
                 self.flags.add("ext:crc_present")
                 self.crc32 = Syncsafe.decode(self.__read_extended_header_flag_data())
-            if flags & 16:
+            if flags & 0x10:
                 self.flags.add("ext:restrictions")
                 self.restrictions = self.__read_extended_header_flag_data()
         except Exception as e:
@@ -417,19 +498,19 @@ class Tag24(Tag):
     def __interpret_frame_flags(self, frameid, b, data):
         flags = {}
         # Frame format flags
-        if b & 0xB000:
+        if b & self.__FRAME24_FORMAT_UNKNOWN_MASK:
             raise FrameError("Unknown ID3v2.4 frame encoding flags: 0x{0:X}".format(b))
-        if b & 0x4000:
+        if b & self.__FRAME24_FORMAT_GROUP:
             flags["group"] = data[0]
             data = data[1:]
-        if b & 0x0800:
+        if b & self.__FRAME24_FORMAT_COMPRESSED:
             flags["compressed"] = True
-        if b & 0x0400:
+        if b & self.__FRAME24_FORMAT_ENCRYPTED:
             raise FrameError("Can't read ID3v2.4 encrypted frames")
-        if b & 0x0200:
+        if b & self.__FRAME24_FORMAT_UNSYNCHRONISED:
             flags["unsynchronised"] = True
         expanded_size = len(data)
-        if b & 0x0100:
+        if b & self.__FRAME24_FORMAT_DATA_LENGTH_INDICATOR:
             flags["data_length_indicator"]
             expanded_size = Syncsafe.decode(data[0:4])
             data = data[4:]
@@ -438,13 +519,13 @@ class Tag24(Tag):
         if "compressed" in self.flags:
             data = zlib.decompress(data, expanded_size)        
         # Frame status flags
-        if b & 0x0040:
+        if b & self.__FRAME24_STATUS_DISCARD_ON_TAG_ALTER:
             flags["discard_on_tag_alter"] = True
-        if b & 0x0020:
+        if b & self.__FRAME24_STATUS_DISCARD_ON_FILE_ALTER:
             flags["discard_on_file_alter"] = True
-        if b & 0x0010:
+        if b & self.__FRAME24_STATUS_READ_ONLY:
             flags["read_only"] = True
-        if b & 0x008F:
+        if b & self.__FRAME24_STATUS_UNKNOWN_MASK:
             warn("Unexpected status flags on {0} frame: 0x{1:X}".format(frameid, b), Warning)
         return flags, data
 
@@ -465,6 +546,64 @@ class Tag24(Tag):
             return self._frame_from_data(frameid, data, flags)
         except Exception as e:
             return ErrorFrame(frameid, data, e)
+
+    def encode_header(self):
+        # flags
+        f = 0
+        if frame.flags["unsynchronised"]:
+            f |= __TAG24_UNSYNCHRONISED
+        if frame.flags["extended_header"]:
+            f |= __TAG24_EXTENDED_HEADER
+        if frame.flags["experimental"]:
+            f |= __TAG24_EXPERIMENTAL
+        if frame.flags["footer"]:
+            f |= __TAG24_FOOTER
+        data.extend(Int8.encode(f, 2))
+
+
+    def _encode_one_frame(self, frame):
+        framedata = frame._to_data()
+        origlen = len(framedata)
+
+        flagval = 0
+        frameinfo = bytearray()
+        if type(frame.flags.get("group")) == Integer:
+            frameinfo.append(frame.flags["group"])
+            flagval |= self.__FRAME24_FORMAT_GROUP
+        if frame.flags.get("compressed"):
+            frame.flags["data_length_indicator"] = True
+            framedata = zlib.compress(framedata)
+            flagval |= self.__FRAME24_FORMAT_COMPRESSED
+        if frame.flags.get("unsynchronised"):
+            frame.flags["data_length_indicator"] = True
+            framedata = Unsync.encode(framedata)
+            flagval |= self.__FRAME24_FORMAT_UNSYNCHRONISED
+        if frame.flags.get("data_length_indicator"):
+            frameinfo.extend(Syncsafe.encode(origlen))
+            flagval |= self.__FRAME24_FORMAT_DATA_LENGTH_INDICATOR
+
+        if frame.flags.get("discard_on_tag_alter"):
+            flagval |= self.__FRAME24_STATUS_DISCARD_ON_TAG_ALTER
+        if frame.flags.get("discard_on_file_alter"):
+            flagval |= self.__FRAME24_STATUS_DISCARD_ON_FILE_ALTER
+        if frame.flags.get("read_only"):
+            flagval |= self.__FRAME24_STATUS_READ_ONLY
+
+        data = bytearray()
+        # Frame id
+        if len(frame.frameid) != 4 or not self._is_frame_id(frame.frameid):
+            raise "Invalid ID3v2.4 frame id {0}".format(repr(frame.frameid))
+        data.extend(frame.frameid.encode("ASCII"))
+        # Size
+        data.extend(Syncsafe.encode(len(frameinfo) + len(framedata), 4))
+        # Flags
+        data.extend(Int8.encode(flagval, 2))
+        assert len(data) == 10
+        # Format info
+        data.extend(frameinfo)
+        # Frame data
+        data.extend(framedata)
+        return data
 
 
 # Spec system comes from Mutagen
@@ -588,7 +727,7 @@ class URLStringSpec(Spec):
         rawstr, sep, data = data.partition(b"\x00")
         if len(rawstr) == 0 and len(data) > 0:
             # iTunes prepends an extra null byte to WFED frames (encoding spec?)
-            #warn("Frame {0} includes a text encoding byte".format(frame.frameid), Warning)
+            warn("Frame {0} includes a text encoding byte".format(frame.frameid), Warning)
             rawstr, sep, data = data.partition(b"\x00")
         return rawstr.decode('iso-8859-1'), data
     def write(self, frame, value):
