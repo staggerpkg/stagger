@@ -244,16 +244,16 @@ class Tag22(Tag):
         except Exception as e:
             return ErrorFrame(frameid, data, e)
 
-    def _encode_one_frame(self):
+    def _encode_one_frame(self, frame):
         framedata = frame._to_data()
 
         data = bytearray()
         # Frame id
-        if len(frame.frameid) != 3 or not self._is_frame_id(frame.frameid):
+        if len(frame.frameid) != 3 or not self._is_frame_id(frame.frameid.encode("ASCII")):
             raise "Invalid ID3v2.2 frame id {0}".format(repr(frame.frameid))
         data.extend(frame.frameid.encode("ASCII"))
         # Size
-        data.extend(Int8.encode(len(framedata), 3))
+        data.extend(Int8.encode(len(framedata), width=3))
         assert(len(data) == 6)
         data.extend(framedata)
         return data
@@ -361,8 +361,8 @@ class Tag23(Tag):
         if frame.flags.get("compressed"):
             framedata = zlib.compress(framedata)
             flagval |= self.__FRAME23_FORMAT_COMPRESSED
-            frameinfo.extend(Int8.encode(origlen, 4))
-        if type(frame.flags.get("group")) == Integer:
+            frameinfo.extend(Int8.encode(origlen, width=4))
+        if type(frame.flags.get("group")) == int:
             frameinfo.append(frame.flags["group"])
             flagval |= self.__FRAME23_FORMAT_GROUP
         if frame.flags.get("discard_on_tag_alter"):
@@ -374,13 +374,13 @@ class Tag23(Tag):
         
         data = bytearray()
         # Frame id
-        if len(frame.frameid) != 4 or not self._is_frame_id(frame.frameid):
+        if len(frame.frameid) != 4 or not self._is_frame_id(frame.frameid.encode("ASCII")):
             raise "Invalid ID3v2.3 frame id {0}".format(repr(frame.frameid))
         data.extend(frame.frameid.encode("ASCII"))
         # Size
-        data.extend(Int8.encode(len(frameinfo) + len(framedata), 4))
+        data.extend(Int8.encode(len(frameinfo) + len(framedata), width=4))
         # Flags
-        data.extend(Int8.encode(flagval, 2))
+        data.extend(Int8.encode(flagval, width=2))
         assert len(data) == 10
         # Format info
         data.extend(frameinfo)
@@ -558,7 +558,7 @@ class Tag24(Tag):
             f |= __TAG24_EXPERIMENTAL
         if frame.flags["footer"]:
             f |= __TAG24_FOOTER
-        data.extend(Int8.encode(f, 2))
+        data.extend(Int8.encode(f, width=2))
 
 
     def _encode_one_frame(self, frame):
@@ -567,7 +567,7 @@ class Tag24(Tag):
 
         flagval = 0
         frameinfo = bytearray()
-        if type(frame.flags.get("group")) == Integer:
+        if type(frame.flags.get("group")) == int:
             frameinfo.append(frame.flags["group"])
             flagval |= self.__FRAME24_FORMAT_GROUP
         if frame.flags.get("compressed"):
@@ -579,7 +579,7 @@ class Tag24(Tag):
             framedata = Unsync.encode(framedata)
             flagval |= self.__FRAME24_FORMAT_UNSYNCHRONISED
         if frame.flags.get("data_length_indicator"):
-            frameinfo.extend(Syncsafe.encode(origlen))
+            frameinfo.extend(Syncsafe.encode(origlen, width=4))
             flagval |= self.__FRAME24_FORMAT_DATA_LENGTH_INDICATOR
 
         if frame.flags.get("discard_on_tag_alter"):
@@ -591,13 +591,13 @@ class Tag24(Tag):
 
         data = bytearray()
         # Frame id
-        if len(frame.frameid) != 4 or not self._is_frame_id(frame.frameid):
+        if len(frame.frameid) != 4 or not self._is_frame_id(frame.frameid.encode("ASCII")):
             raise "Invalid ID3v2.4 frame id {0}".format(repr(frame.frameid))
         data.extend(frame.frameid.encode("ASCII"))
         # Size
-        data.extend(Syncsafe.encode(len(frameinfo) + len(framedata), 4))
+        data.extend(Syncsafe.encode(len(frameinfo) + len(framedata), width=4))
         # Flags
-        data.extend(Int8.encode(flagval, 2))
+        data.extend(Int8.encode(flagval, width=2))
         assert len(data) == 10
         # Format info
         data.extend(frameinfo)
@@ -642,7 +642,8 @@ class IntegerSpec(Spec):
     def read(self, frame, data):
         return Int8.decode(data[:self.width]), data[self.width:]
     def write(self, frame, value):
-        if value is not int: raise ValueError("Not an integer")
+        if type(value) is not int: 
+            raise ValueError("Not an integer: {0}".format(repr(value)))
         return Int8.encode(value, width=self.width)
     def validate(self, frame, value):
         self.write(frame, value)
@@ -740,8 +741,8 @@ class EncodingSpec(ByteSpec):
             raise FrameError("Invalid encoding")
         return enc, data
     def write(self, frame, value):
-        if enc & 0xFC:
-            raise ValueError("Invalid encoding {0}".format(enc))
+        if value & 0xFC:
+            raise ValueError("Invalid encoding 0x{0:X}".format(value))
         return super().write(frame, value)
     def to_str(self, value):
         return EncodedStringSpec._encodings[value][0]
@@ -792,7 +793,7 @@ class SequenceSpec(Spec):
     def write(self, frame, values):
         data = bytearray()
         for v in values:
-            data.append(self.spec.write(frame, v))
+            data.extend(self.spec.write(frame, v))
         return data
     def validate(self, frame, values):
         for v in values:
@@ -850,7 +851,7 @@ class Frame(metaclass=abc.ABCMeta):
             warn("General support for frame {0} is virtually nonexistent; its use is discouraged".format(self.frameid), BozoFrameWarning)
         data = bytearray()
         for spec in self._framespec:
-            data.append(spec.write(self, getattr(self, spec.name)))
+            data.extend(spec.write(self, getattr(self, spec.name)))
         return data
 
     def __repr__(self):
@@ -860,7 +861,7 @@ class Frame(metaclass=abc.ABCMeta):
             args.append("frameid={0!r}".format(self.frameid))
         if self.flags:
             args.append("flags={0!r}".format(self.flags))
-        args.extend ("{0}={1!r}".format(spec.name, getattr(self, spec.name)) for spec in self._framespec)
+        args.extend("{0}={1!r}".format(spec.name, getattr(self, spec.name)) for spec in self._framespec)
         return "{0}({1})".format(stype, ", ".join(args))
 
     def _str_fields(self):
