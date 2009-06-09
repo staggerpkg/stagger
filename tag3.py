@@ -36,12 +36,12 @@ def tuples_across(iterable, width):
         empty = False
         l[0:width-1] = l[1:]
         l[-1] = elem
-        yield l
+        yield tuple(l)
     if not empty:
         for i in range(width - 1):
             l[0:width-1] = l[1:]
             l[-1] = None
-            yield l
+            yield tuple(l)
 
 class Unsync:
     @staticmethod
@@ -62,7 +62,7 @@ class Unsync:
             if t[0] is None:
                 continue # Beginning tuples
             yield t[0]
-            if t[0] == 0xFF and (t[1] == 0x00 or t[1] & 0xE0):
+            if t[0] == 0xFF and (t[1] is None or t[1] == 0x00 or t[1] & 0xE0):
                 yield 0x00 # Insert sync char
 
     @staticmethod
