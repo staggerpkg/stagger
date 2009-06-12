@@ -1618,5 +1618,3 @@ def read(filename):
         yield _tag_versions[header[3:5]](file)
     finally:
         file.close()
-
-
