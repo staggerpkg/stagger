@@ -50,6 +50,7 @@ class NoTagError(Error): pass
 class TagError(Error, ValueError): pass
 class NotAFrameError(Error): pass
 class FrameError(Error): pass
+class IncompatibleFrameError(FrameError): pass
 
 def xread(file, length):
     data = file.read(length)
@@ -844,13 +845,14 @@ class MultiSpec(Spec):
 
 class Frame(metaclass=abc.ABCMeta):
     _framespec = tuple()
+    _version = tuple()
     
     def __init__(self, frameid=None, flags=None, **kwargs):
         self.frameid = frameid if frameid else type(self).__name__
         self.flags = flags if flags else {}
         for spec in self._framespec:
             val = kwargs.get(spec.name, None)
-            if val is not None: spec.validate(self, val)
+            if val != None: spec.validate(self, val)
             setattr(self, spec.name, val)
 
     @classmethod
@@ -862,6 +864,32 @@ class Frame(metaclass=abc.ABCMeta):
             val, data = spec.read(frame, data)
             setattr(frame, spec.name, val)
         return frame
+
+    @classmethod
+    def _from_frame(cls, frame):
+        "Copy constructor"
+        assert frame._framespec == cls._framespec
+        new = cls(flags=frame.flags)
+        for spec in cls._framespec:
+            setattr(new, spec.name, getattr(frame, spec.name, None))
+        return new
+
+    @classmethod
+    def _in_version(self, version):
+        return (self._version == version
+                or (isinstance(self._version, collections.Container) 
+                    and version in self._version))
+
+    def _to_version(self, version):
+        if self._in_version(version):
+            return self
+        if version == 2 and hasattr(self, "_v2_frame"):
+            return self._v2_frame._from_frame(self)
+        if self._in_version(2):
+            base = type(self).__bases__[0]
+            if issubclass(base, Frame) and base._in_version(version): 
+                return base._from_frame(self)
+        raise IncompatibleFrameError()
 
     def _to_data(self):
         if getattr(self, "_bozo", False):
@@ -937,44 +965,65 @@ class CreditsFrame(Frame):
 class UFID(Frame):
     "Unique file identifier"
     _framespec = (NullTerminatedStringSpec("owner"), BinaryDataSpec("data"))
-    _version = {3, 4}
 
-class TIT1(TextFrame): "Content group description"
-class TIT2(TextFrame): "Title/songname/content description"
-class TIT3(TextFrame): "Subtitle/Description refinement"
-class TALB(TextFrame): "Album/Movie/Show title"
-class TOAL(TextFrame): "Original album/movie/show title"
+class TIT1(TextFrame): 
+    "Content group description"
 
-class TRCK(TextFrame): "Track number/Position in set"
+class TIT2(TextFrame): 
+    "Title/songname/content description"
+
+class TIT3(TextFrame): 
+    "Subtitle/Description refinement"
+
+class TALB(TextFrame): 
+    "Album/Movie/Show title"
+
+class TOAL(TextFrame): 
+    "Original album/movie/show title"
+
+class TRCK(TextFrame): 
+    "Track number/Position in set"
 # #/#
 
-class TPOS(TextFrame): "Part of a set"
+class TPOS(TextFrame): 
+    "Part of a set"
 # #/#
 
 class TSST(TextFrame):
     "Set subtitle"
-    _version = {4}
-    
-class TSRC(TextFrame): "ISRC (international standard recording code)"
+    _version = 4
+
+class TSRC(TextFrame): 
+    "ISRC (international standard recording code)"
 
 
 # 4.2.2. Involved persons frames
-class TPE1(TextFrame): "Lead performer(s)/Soloist(s)"
-class TPE2(TextFrame): "Band/orchestra/accompaniment"
-class TPE3(TextFrame): "Conductor/performer refinement"
-class TPE4(TextFrame): "Interpreted, remixed, or otherwise modified by"
-class TOPE(TextFrame): "Original artist(s)/performer(s)"
+class TPE1(TextFrame): 
+    "Lead performer(s)/Soloist(s)"
+
+class TPE2(TextFrame): 
+    "Band/orchestra/accompaniment"
+
+class TPE3(TextFrame): 
+    "Conductor/performer refinement"
+
+class TPE4(TextFrame): 
+    "Interpreted, remixed, or otherwise modified by"
+
+class TOPE(TextFrame): 
+    "Original artist(s)/performer(s)"
+
 class TEXT(TextFrame): "Lyricist/Text writer"
 class TOLY(TextFrame): "Original lyricist(s)/text writer(s)"
 class TCOM(TextFrame): "Composer"
 
 class TMCL(CreditsFrame):
     "Musician credits list"
-    _version = {4}
+    _version = 4
 
 class TIPL(CreditsFrame):
     "Involved people list"
-    _version = {4}
+    _version = 4
 
 class TENC(TextFrame): "Encoded by"
 
@@ -1005,7 +1054,7 @@ class TFLT(TextFrame): "File type"
 class TMED(TextFrame): "Media type"
 class TMOO(TextFrame):
     "Mood"
-    _version = {4}
+    _version = 4
 
 
 # 4.2.4. Rights and license frames
@@ -1013,7 +1062,7 @@ class TMOO(TextFrame):
 class TCOP(TextFrame): "Copyright message"
 class TPRO(TextFrame):
     "Produced notice"
-    _version = {4}
+    _version = 4
     
 class TPUB(TextFrame): "Publisher"
 class TOWN(TextFrame): "File owner/licensee"
@@ -1031,38 +1080,38 @@ class TDLY(TextFrame): "Playlist delay"
 class TDEN(TextFrame):
     # timestamp
     "Encoding time"
-    _version = {4}
+    _version = 4
 
 class TDOR(TextFrame):
     "Original release time"
     # timestamp
-    _version = {4}
+    _version = 4
 
 class TDRC(TextFrame):
     "Recording time"
     # timestamp
-    _version = {4}
+    _version = 4
 
 class TDRL(TextFrame):
     "Release time"
     # timestamp
-    _version = {4}
+    _version = 4
 
 class TDTG(TextFrame):
     "Tagging time"
     # timestamp
-    _version = {4}
+    _version = 4
 
 class TSSE(TextFrame): "Software/Hardware and settings used for encoding"
 class TSOA(TextFrame):
     "Album sort order"
-    _version = {4}
+    _version = 4
 class TSOP(TextFrame):
     "Performer sort order"
-    _version = {4}
+    _version = 4
 class TSOT(TextFrame):
     "Title sort order"
-    _version = {4}
+    _version = 4
 
 
 # 4.2.6. User defined information frame
@@ -1295,14 +1344,14 @@ class SIGN(Frame):
                   BinaryDataSpec("data"))
     _untested = True
     _bozo = True
-    _version = {4}
+    _version = 4
 
 class SEEK(Frame):
     "Seek frame"
     _framespec = (IntegerSpec("offset", 4), )
     _untested = True
     _bozo = True
-    _version = {4}
+    _version = 4
 
 class ASPISpec(Spec):
     def read(self, frame, data):
@@ -1328,7 +1377,7 @@ class ASPI(Frame):
                   ASPISpec("Fi"))
     _untested = True
     _bozo = True
-    _version = {4}
+    _version = 4
 
 
 # ID3v2.3
@@ -1338,40 +1387,40 @@ class TDAT(TextFrame):
     A numerical string in DDMM format containing the date for the recording.
     Replaced by TDRC in id3v2.4
     """
-    _version = {2, 3}
+    _version = 3
 
 class TIME(TextFrame):
     """Time
     A numerical string in HHMM format containing the time for the recording.
     Replaced by TDRC in id3v2.4
     """
-    _version = {2, 3}
+    _version = 3
 
 class TORY(TextFrame):
     """Original release year
     Replaced by TDOR in id3v2.4
     """
-    _version = {2, 3}
+    _version = 3
 
 class TRDA(TextFrame):
     """Recording dates
     Replaced by TDRC in id3v2.4
     """
-    _version = {2, 3}
+    _version = 3
 
 class TSIZ(TextFrame):
     """Size
     Size of the audio file in bytes, excluding the ID3v2 tag.
     Removed in id3v2.4
     """
-    _version = {2, 3}
+    _version = 3
 
 class TYER(TextFrame):
     """Year
     A numerical string with the year of the recording.
     Replaced by TDRC in id3v2.4
     """
-    _version = {2, 3}
+    _version = 3
     
 class IPLS(CreditsFrame):
     """Involved people list
@@ -1380,7 +1429,7 @@ class IPLS(CreditsFrame):
     _framespec = (BinaryDataSpec("data"),)
     _untested = True
     _bozo = True
-    _version = {2, 3}
+    _version = 3
 
 class EQUA(Frame):
     """Equalisation
@@ -1389,7 +1438,7 @@ class EQUA(Frame):
     _framespec = (ByteSpec("bits"), BinaryDataSpec("data"))
     _untested = True
     _bozo = True
-    _version = {3}
+    _version = 3
 
 class RVAD(Frame):
     """Relative volume adjustment
@@ -1398,12 +1447,11 @@ class RVAD(Frame):
     _framespec = (BinaryDataSpec("data"),)
     _untested = True
     _bozo = True
-    _version = {3}
+    _version = 3
 
 # ID3v2.2
 
 class UFI(UFID): pass
-
 class TT1(TIT1): pass
 class TT2(TIT2): pass
 class TT3(TIT3): pass
@@ -1473,7 +1521,7 @@ class PIC(Frame):
                   ByteSpec("type"),
                   NullTerminatedStringSpec("desc"),
                   BinaryDataSpec("data"))
-    _version = {2}
+    _version = 2
     def _str_fields(self):
         img = "{0} bytes of {1} data".format(len(self.data), 
                                                imghdr.what(None, self.data[:32]))
@@ -1496,7 +1544,7 @@ class CRM(Frame):
                   BinaryDataSpec("data"))
     _bozo = True
     _untested = True
-    _version = {2}
+    _version = 2
 
 class CRA(AENC): pass
 
@@ -1507,7 +1555,7 @@ class LNK(Frame):
                   BinaryDataSpec("data"))
     _bozo = True
     _untested = True
-    _version = {2}
+    _version = 2
 
 # Nonstandard frames
 class TCMP(TextFrame): "iTunes: Part of a compilation"
@@ -1542,28 +1590,6 @@ class PCST(Frame):
     """
     _framespec = (IntegerSpec("value", 4),)
 class PCS(PCST): pass
-
-
-Tag22.known_frames = { n: v
-                       for n, v in globals().items()
-                       if len(n) == 3
-                       and isinstance(v, type) and issubclass(v, Frame) }
-
-Tag23.known_frames = { n: v
-                       for n, v in globals().items()
-                       if len(n) == 4
-                       and isinstance(v, type) and issubclass(v, Frame) }
-
-Tag24.known_frames = { n: v
-                       for n, v in globals().items()
-                       if len(n) == 4
-                       and isinstance(v, type) and issubclass(v, Frame) }
-
-_tag_versions = {
-    b"\x02\x00": Tag22,
-    b"\x03\x00": Tag23,
-    b"\x04\x00": Tag24,
-    }
 
 
 # Attached picture (APIC & PIC) types
@@ -1602,8 +1628,13 @@ genres = ( "Blues", "Classic Rock", "Country", "Dance", "Disco", "Funk",
            "Samba", "Folklore", "Ballad", "Power Ballad", "Rhythmic Soul",
            "Freestyle", "Duet", "Punk Rock", "Drum Solo", "A capella",
            "Euro-House", "Dance Hall" )
-          
 
+_tag_versions = {
+    2: Tag22,
+    3: Tag23,
+    4: Tag24,
+    }
+          
 @contextmanager
 def read(filename):
     file = open(filename, "rb")
@@ -1613,8 +1644,41 @@ def read(filename):
             raise EOFError
         if header[0:3] != b"ID3":
             raise NoTagError("ID3v2 tag not found")
-        if header[3:5] not in _tag_versions:
+        if header[3] not in _tag_versions or header[4] != 0:
             raise NoTagError("Unknown ID3 version: 2.{0}.{1}".format(*header[3:5]))
-        yield _tag_versions[header[3:5]](file)
+        yield _tag_versions[header[3]](file)
     finally:
         file.close()
+
+
+def register_frame(cls):
+    assert isinstance(cls, type) and issubclass(cls, Frame) and cls is not Frame
+    assert 3 <= len(cls.__name__) <= 4
+    if len(cls.__name__) == 3:
+        cls._version = 2
+    if len(cls.__name__) == 4 and cls._version == tuple():
+        cls._version = (3, 4)                
+    for version in _tag_versions:
+        if cls._in_version(version):
+            _tag_versions[version].known_frames[cls.__name__] = cls
+
+# Package initialization
+
+def _register_builtin_frames():
+    for obj in globals().values():
+        if not (isinstance(obj, type) 
+                and issubclass(obj, Frame) 
+                and 3 <= len(obj.__name__) <= 4):
+            continue
+        register_frame(obj)
+        # Register v2.2 names of v2.3 & v2.4 frames
+        if obj._in_version(2):
+            base = obj.__bases__[0]
+            if (issubclass(base, Frame) and (base._in_version(3) 
+                                             or base._in_version(4))):
+                assert not hasattr(base, "_v2_frame")
+                base._v2_frame = obj
+
+
+
+_register_builtin_frames()
