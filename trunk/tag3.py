@@ -1,4 +1,32 @@
 #!/usr/bin/python3
+#
+# Copyright (c) 2009, Karoly Lorentey
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# 
+# - Redistributions of source code must retain the above copyright
+#   notice, this list of conditions and the following disclaimer.
+#
+# - Redistributions in binary form must reproduce the above copyright
+#   notice, this list of conditions and the following disclaimer in
+#   the documentation and/or other materials provided with the
+#   distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+# COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+# INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+# BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+# ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
 
 import builtins
 import struct
@@ -10,7 +38,7 @@ from warnings import warn
 from contextlib import contextmanager
 import imghdr
 
-__all__ = ["read", "Error"]
+__all__ = ["read"]
 
 class Error(Exception): pass
 
@@ -144,7 +172,10 @@ class Tag(metaclass=abc.ABCMeta):
         self.file = file
 
     def __str__(self):
-        return "ID3v2.{0}(flags={{{1}}} size={2})".format(self.version, " ".join(self.flags), self.size)
+        return "ID3v2.{0}(flags={{{1}}} size={2})".format(
+            self.version, 
+            " ".join(self.flags), 
+            self.size)
 
     @abstractmethod
     def _reset(self): pass
@@ -1305,40 +1336,47 @@ class ASPI(Frame):
 class TDAT(TextFrame):
     """Date
     A numerical string in DDMM format containing the date for the recording.
-    Replaced by TDRC in id3v2.4"""
+    Replaced by TDRC in id3v2.4
+    """
     _version = {2, 3}
 
 class TIME(TextFrame):
     """Time
     A numerical string in HHMM format containing the time for the recording.
-    Replaced by TDRC in id3v2.4"""
+    Replaced by TDRC in id3v2.4
+    """
     _version = {2, 3}
 
 class TORY(TextFrame):
     """Original release year
-    Replaced by TDOR in id3v2.4"""
+    Replaced by TDOR in id3v2.4
+    """
     _version = {2, 3}
 
 class TRDA(TextFrame):
     """Recording dates
-    Replaced by TDRC in id3v2.4"""
+    Replaced by TDRC in id3v2.4
+    """
     _version = {2, 3}
 
 class TSIZ(TextFrame):
     """Size
     Size of the audio file in bytes, excluding the ID3v2 tag.
-    Removed in id3v2.4"""
+    Removed in id3v2.4
+    """
     _version = {2, 3}
 
 class TYER(TextFrame):
     """Year
     A numerical string with the year of the recording.
-    Replaced by TDRC in id3v2.4"""
+    Replaced by TDRC in id3v2.4
+    """
     _version = {2, 3}
     
 class IPLS(CreditsFrame):
     """Involved people list
-    Replaced by TMCL and TIPL in id3v2.4"""
+    Replaced by TMCL and TIPL in id3v2.4
+    """
     _framespec = (BinaryDataSpec("data"),)
     _untested = True
     _bozo = True
@@ -1346,7 +1384,8 @@ class IPLS(CreditsFrame):
 
 class EQUA(Frame):
     """Equalisation
-    Replaced by EQU2 in id3v2.4"""
+    Replaced by EQU2 in id3v2.4
+    """
     _framespec = (ByteSpec("bits"), BinaryDataSpec("data"))
     _untested = True
     _bozo = True
@@ -1354,7 +1393,8 @@ class EQUA(Frame):
 
 class RVAD(Frame):
     """Relative volume adjustment
-    Replaced by RVA2 in id3v2.4"""
+    Replaced by RVA2 in id3v2.4
+    """
     _framespec = (BinaryDataSpec("data"),)
     _untested = True
     _bozo = True
@@ -1490,7 +1530,8 @@ class TCT(TCAT): pass
 
 class TKWD(TextFrame): 
     """iTunes: Podcast keywords
-    Comma-separated list of keywords."""
+    Comma-separated list of keywords.
+    """
 class TKW(TKWD): pass
 
 class PCST(Frame):
@@ -1526,12 +1567,12 @@ _tag_versions = {
 
 
 # Attached picture (APIC & PIC) types
-picture_types = ["Other", "32x32 icon", "Other icon", "Front Cover", "Back Cover",
-                 "Leaflet", "Media", "Lead artist", "Artist", "Conductor",
-                 "Band/Orchestra", "Composer", "Lyricist/text writer",
-                 "Recording Location", "Recording", "Performance", "Screen capture",
-                 "A bright coloured fish", "Illustration", "Band/artist",
-                 "Publisher/Studio"]
+picture_types = ["Other", "32x32 icon", "Other icon", "Front Cover", 
+                 "Back Cover", "Leaflet", "Media", "Lead artist", "Artist", 
+                 "Conductor", "Band/Orchestra", "Composer", 
+                 "Lyricist/text writer", "Recording Location", "Recording", 
+                 "Performance", "Screen capture", "A bright coloured fish", 
+                 "Illustration", "Band/artist", "Publisher/Studio"]
 
 # ID3v1 genre list
 genres = ( "Blues", "Classic Rock", "Country", "Dance", "Disco", "Funk",
