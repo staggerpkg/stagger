@@ -1,13 +1,13 @@
 #!/usr/bin/python3
 
-import tag3
+import stagger
 import os
 import random
 import warnings
 import sys
 
-warnings.simplefilter("always", tag3.Warning)
-#warnings.simplefilter("error", tag3.Warning)
+warnings.simplefilter("always", stagger.Warning)
+#warnings.simplefilter("error", stagger.Warning)
 
 w1 = r"C:\Users\lorentey\Music"
 w2 = r"S:\Music"
@@ -44,11 +44,11 @@ def test(*roots, wait=False, randomize=False, limit=None, catch_errors=True):
     for mp3 in head(mp3s, limit):
         try:
             print(mp3)
-            with tag3.read(mp3) as tag:
+            with stagger.read(mp3) as tag:
                 print(tag)
                 for frame in tag.frames():
                     print("    " + str(frame))
-        except tag3.NoTagError:
+        except stagger.NoTagError:
             pass
         except Exception as e:
             if catch_errors:
@@ -58,7 +58,7 @@ def test(*roots, wait=False, randomize=False, limit=None, catch_errors=True):
         if wait: input()
 
 def test_encode(file):
-    with tag3.read(file) as tag:
+    with stagger.read(file) as tag:
         print(tag)
         for frame in tag.frames():
             print(" " + str(frame))
