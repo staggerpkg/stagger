@@ -36,7 +36,7 @@ def head(iterable, limit):
 
 def test(*roots, wait=False, randomize=False, limit=None, catch_errors=True):
     mp3s = list_mp3s(roots)
-
+    warnings.simplefilter("error")
     if randomize:
         mp3s = list(mp3s)
         print("{0} files found".format(len(mp3s)))
@@ -45,7 +45,7 @@ def test(*roots, wait=False, randomize=False, limit=None, catch_errors=True):
     for mp3 in head(mp3s, limit):
         try:
             print(mp3)
-            with stagger.read(mp3) as tag:
+            with stagger.lazy_read(mp3) as tag:
                 print(tag)
                 for frame in tag.frames():
                     print("    " + str(frame))
