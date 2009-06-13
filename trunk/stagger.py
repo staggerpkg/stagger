@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 #
-# Copyright (c) 2009, Karoly Lorentey
+# Copyright (c) 2009, Karoly Lorentey  <karoly@lorentey.hu>
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -37,6 +37,9 @@ from abc import abstractmethod
 from warnings import warn
 from contextlib import contextmanager
 import imghdr
+import tempfile
+import os.path
+import shutil
 
 __all__ = ["read"]
 
@@ -184,8 +187,9 @@ class Tag(metaclass=abc.ABCMeta):
     @abstractmethod
     def _read_one_frame(self): pass
 
-    @abstractmethod
-    def _encode_one_frame(self, frame): pass
+    @classmethod
+    def _encode_one_frame(cls, frame): 
+        raise NotImplemented
 
     def frames(self):
         self._reset()
@@ -198,17 +202,19 @@ class Tag(metaclass=abc.ABCMeta):
             except NotAFrameError:
                 break
 
-    def _is_frame_id(self, data):
+    @staticmethod
+    def _is_frame_id(data):
         # Allow a single space at end of four-character ids
         # Some programs (e.g. iTunes 8.2) generate such frames when converting
         # from 2.2 to 2.3/2.4 tags.
         pattern = re.compile(b"^[A-Z][A-Z0-9]{2}[A-Z0-9 ]?$")
         return pattern.match(data)
 
-    def _frame_from_data(self, frameid, data, flags=None):
+    @classmethod
+    def _frame_from_data(cls, frameid, data, flags=None):
         if flags is None: flags = {}
-        if frameid in self.known_frames:
-            return self.known_frames[frameid]._from_data(frameid, data, flags)
+        if frameid in cls.known_frames:
+            return cls.known_frames[frameid]._from_data(frameid, data, flags)
         flags["unknown"] = True
         if frameid.startswith('T'): # Unknown text frame
             return TextFrame._from_data(frameid, data, flags)
@@ -217,23 +223,27 @@ class Tag(metaclass=abc.ABCMeta):
         else:
             return UnknownFrame._from_data(frameid, data, flags)
 
+    @classmethod
+    def _bake_tag(cls, frames, flags=None, size_hint=None, padding_default=0, padding_max=0): 
+        raise NotImplemented
+
 class Tag22(Tag):
+    version = 2
     def __init__(self, file):
-        self.version = 2
         super().__init__(file)
         self._fp_tag_start = file.tell()
         header = xread(file, 10)
         if header[0:5] != b"ID3\x02\00":
             raise TagError("ID3v2.2 header not found")
-        if header[5] & 128:
+        if header[5] & 0x80:
             self.flags.add("unsynchronisation")
-        if header[5] & 64: # Compression bit is ill-defined in standard
+        if header[5] & 0x40: # Compression bit is ill-defined in standard
             raise TagError("ID3v2.2 tag compression is not supported")
-        if header[5] & 63:
+        if header[5] & 0x3F:
             raise TagError("Unknown ID3v2.2 flags")
         self.size = Syncsafe.decode(header[6:10])
         self._fp_frames_start = file.tell()
-        self._fp_frames_end = self._fp_frames_start + 10 + self.size
+        self._fp_frames_end = self._fp_frames_start + self.size
         self._fp_tag_end = self._fp_frames_end
         self._reset()
 
@@ -262,18 +272,45 @@ class Tag22(Tag):
         except Exception as e:
             return ErrorFrame(frameid, data, e)
 
-    def _encode_one_frame(self, frame):
+    @classmethod
+    def _encode_one_frame(cls, frame):
         framedata = frame._to_data()
 
         data = bytearray()
         # Frame id
-        if len(frame.frameid) != 3 or not self._is_frame_id(frame.frameid.encode("ASCII")):
+        if len(frame.frameid) != 3 or not cls._is_frame_id(frame.frameid.encode("ASCII")):
             raise "Invalid ID3v2.2 frame id {0}".format(repr(frame.frameid))
         data.extend(frame.frameid.encode("ASCII"))
         # Size
         data.extend(Int8.encode(len(framedata), width=3))
         assert(len(data) == 6)
         data.extend(framedata)
+        return data
+
+    @classmethod
+    def _bake_tag(cls, frames, flags=None, size_hint=None, padding_default=0, padding_max=0): 
+        if flags == None: flags = {}
+
+        framedata = bytearray().join(
+            cls._encode_one_frame(frame._to_version(cls.version)) 
+            for frame in frames)
+        if "unsynchronisation" in flags:
+            framedata = Unsync.encode(framedata)
+        
+        size = len(framedata)
+        if (size_hint != None and size < size_hint 
+            and (padding_max == None or size_hint - size <= padding_max)):
+            size = size_hint
+        elif padding_default:
+            size += padding_default
+
+        data = bytearray()
+        data.extend(b"ID3\x02\x00")
+        data.append(0x80 if "unsynchronisation" in flags else 0x00)
+        data.extend(Syncsafe.encode(size, width=4))
+        data.extend(framedata)
+        if size > len(framedata):
+            data.extend(b"\x00" * (size - len(framedata)))
         return data
 
 class Tag23(Tag):
@@ -287,8 +324,8 @@ class Tag23(Tag):
     __FRAME23_STATUS_READ_ONLY = 0x2000
     __FRAME23_STATUS_UNKNOWN_MASK = 0x1F00
 
+    version = 3
     def __init__(self, file):
-        self.version = 3
         super().__init__(file)
         self._fp_tag_start = file.tell()
         header = xread(file, 10)
@@ -370,7 +407,8 @@ class Tag23(Tag):
         except Exception as e:
             return ErrorFrame(frameid, data, e)
 
-    def _encode_one_frame(self, frame):
+    @classmethod
+    def _encode_one_frame(cls, frame):
         framedata = frame._to_data()
         origlen = len(framedata)
 
@@ -378,21 +416,21 @@ class Tag23(Tag):
         frameinfo = bytearray()
         if frame.flags.get("compressed"):
             framedata = zlib.compress(framedata)
-            flagval |= self.__FRAME23_FORMAT_COMPRESSED
+            flagval |= cls.__FRAME23_FORMAT_COMPRESSED
             frameinfo.extend(Int8.encode(origlen, width=4))
         if type(frame.flags.get("group")) == int:
             frameinfo.append(frame.flags["group"])
-            flagval |= self.__FRAME23_FORMAT_GROUP
+            flagval |= cls.__FRAME23_FORMAT_GROUP
         if frame.flags.get("discard_on_tag_alter"):
-            flagval |= self.__FRAME23_STATUS_DISCARD_ON_TAG_ALTER
+            flagval |= cls.__FRAME23_STATUS_DISCARD_ON_TAG_ALTER
         if frame.flags.get("discard_on_file_alter"):
-            flagval |= self.__FRAME23_STATUS_DISCARD_ON_FILE_ALTER
+            flagval |= cls.__FRAME23_STATUS_DISCARD_ON_FILE_ALTER
         if frame.flags.get("read_only"):
-            flagval |= self.__FRAME23_STATUS_READ_ONLY
+            flagval |= cls.__FRAME23_STATUS_READ_ONLY
         
         data = bytearray()
         # Frame id
-        if len(frame.frameid) != 4 or not self._is_frame_id(frame.frameid.encode("ASCII")):
+        if len(frame.frameid) != 4 or not cls._is_frame_id(frame.frameid.encode("ASCII")):
             raise "Invalid ID3v2.3 frame id {0}".format(repr(frame.frameid))
         data.extend(frame.frameid.encode("ASCII"))
         # Size
@@ -404,6 +442,35 @@ class Tag23(Tag):
         data.extend(frameinfo)
         # Frame data
         data.extend(framedata)
+        return data
+
+    @classmethod
+    def _bake_tag(cls, frames, flags=None, size_hint=None, padding_default=0, padding_max=0): 
+        if flags == None: flags = {}
+
+        if "unsynchronisation" in flags:
+            for frame in frames: frame.flags["unsynchronisation"] = True
+        framedata = bytearray().join(
+            cls._encode_one_frame(frame._to_version(cls.version)) 
+            for frame in frames)
+        
+        size = len(framedata)
+        if (size_hint != None and size < size_hint 
+            and (padding_max == None or size_hint - size <= padding_max)):
+            size = size_hint
+        elif padding_default:
+            size += padding_default
+
+        data = bytearray()
+        data.extend(b"ID3\x04\x00")
+        flagval = 0x00
+        if "unsynchronisation" in flags:
+            flagval |= 0x80
+        data.append(flagval)
+        data.extend(Syncsafe.encode(size, width=4))
+        data.extend(framedata)
+        if size > len(framedata):
+            data.extend(b"\x00" * (size - len(framedata)))
         return data
 
 class Tag24(Tag):
@@ -427,8 +494,8 @@ class Tag24(Tag):
     __FRAME24_STATUS_READ_ONLY = 0x1000
     __FRAME24_STATUS_UNKNOWN_MASK = 0x8F00
 
+    version = 4
     def __init__(self, file):
-        self.version = 4
         super().__init__(file)
         self._fp_tag_start = file.tell()
         header = xread(file, 10)
@@ -579,7 +646,8 @@ class Tag24(Tag):
         data.extend(Int8.encode(f, width=2))
 
 
-    def _encode_one_frame(self, frame):
+    @classmethod
+    def _encode_one_frame(cls, frame):
         framedata = frame._to_data()
         origlen = len(framedata)
 
@@ -587,29 +655,29 @@ class Tag24(Tag):
         frameinfo = bytearray()
         if type(frame.flags.get("group")) == int:
             frameinfo.append(frame.flags["group"])
-            flagval |= self.__FRAME24_FORMAT_GROUP
+            flagval |= cls.__FRAME24_FORMAT_GROUP
         if frame.flags.get("compressed"):
             frame.flags["data_length_indicator"] = True
             framedata = zlib.compress(framedata)
-            flagval |= self.__FRAME24_FORMAT_COMPRESSED
+            flagval |= cls.__FRAME24_FORMAT_COMPRESSED
         if frame.flags.get("unsynchronised"):
             frame.flags["data_length_indicator"] = True
             framedata = Unsync.encode(framedata)
-            flagval |= self.__FRAME24_FORMAT_UNSYNCHRONISED
+            flagval |= cls.__FRAME24_FORMAT_UNSYNCHRONISED
         if frame.flags.get("data_length_indicator"):
             frameinfo.extend(Syncsafe.encode(origlen, width=4))
-            flagval |= self.__FRAME24_FORMAT_DATA_LENGTH_INDICATOR
+            flagval |= cls.__FRAME24_FORMAT_DATA_LENGTH_INDICATOR
 
         if frame.flags.get("discard_on_tag_alter"):
-            flagval |= self.__FRAME24_STATUS_DISCARD_ON_TAG_ALTER
+            flagval |= cls.__FRAME24_STATUS_DISCARD_ON_TAG_ALTER
         if frame.flags.get("discard_on_file_alter"):
-            flagval |= self.__FRAME24_STATUS_DISCARD_ON_FILE_ALTER
+            flagval |= cls.__FRAME24_STATUS_DISCARD_ON_FILE_ALTER
         if frame.flags.get("read_only"):
-            flagval |= self.__FRAME24_STATUS_READ_ONLY
+            flagval |= cls.__FRAME24_STATUS_READ_ONLY
 
         data = bytearray()
         # Frame id
-        if len(frame.frameid) != 4 or not self._is_frame_id(frame.frameid.encode("ASCII")):
+        if len(frame.frameid) != 4 or not cls._is_frame_id(frame.frameid.encode("ASCII")):
             raise "Invalid ID3v2.4 frame id {0}".format(repr(frame.frameid))
         data.extend(frame.frameid.encode("ASCII"))
         # Size
@@ -621,6 +689,35 @@ class Tag24(Tag):
         data.extend(frameinfo)
         # Frame data
         data.extend(framedata)
+        return data
+
+    @classmethod
+    def _bake_tag(cls, frames, flags=None, size_hint=None, padding_default=0, padding_max=0): 
+        if flags == None: flags = {}
+
+        framedata = bytearray().join(
+            cls._encode_one_frame(frame._to_version(cls.version)) 
+            for frame in frames)
+        if "unsynchronisation" in flags:
+            framedata = Unsync.encode(framedata)
+        
+        size = len(framedata)
+        if (size_hint != None and size < size_hint 
+            and (padding_max == None or size_hint - size <= padding_max)):
+            size = size_hint
+        elif padding_default:
+            size += padding_default
+
+        data = bytearray()
+        data.extend(b"ID3\x03\x00")
+        flagval = 0x00
+        if "unsynchronisation" in flags:
+            flagval |= 0x80
+        data.append(flagval)
+        data.extend(Syncsafe.encode(size, width=4))
+        data.extend(framedata)
+        if size > len(framedata):
+            data.extend(b"\x00" * (size - len(framedata)))
         return data
 
 
@@ -889,7 +986,7 @@ class Frame(metaclass=abc.ABCMeta):
             base = type(self).__bases__[0]
             if issubclass(base, Frame) and base._in_version(version): 
                 return base._from_frame(self)
-        raise IncompatibleFrameError()
+        raise IncompatibleFrameError("Frame {0} cannot be converted to ID3v2.{1} format".format(self.frameid, version))
 
     def _to_data(self):
         if getattr(self, "_bozo", False):
@@ -1617,7 +1714,7 @@ genres = ( "Blues", "Classic Rock", "Country", "Dance", "Disco", "Funk",
            "Rave", "Showtunes", "Trailer", "Lo-Fi", "Tribal", "Acid Punk", 
            "Acid Jazz", "Polka", "Retro", "Musical", "Rock & Roll", 
            "Hard Rock",
-           # Winamp extensions
+           # 80-125: Winamp extensions
            "Folk", "Folk-Rock", "National Folk", "Swing", "Fast Fusion", 
            "Bebob", "Latin", "Revival", "Celtic", "Bluegrass", "Avantgarde",
            "Gothic Rock", "Progressive Rock", "Psychedelic Rock", 
@@ -1627,7 +1724,13 @@ genres = ( "Blues", "Classic Rock", "Country", "Dance", "Disco", "Funk",
            "Primus", "Porn Groove", "Satire", "Slow Jam", "Club", "Tango",
            "Samba", "Folklore", "Ballad", "Power Ballad", "Rhythmic Soul",
            "Freestyle", "Duet", "Punk Rock", "Drum Solo", "A capella",
-           "Euro-House", "Dance Hall" )
+           "Euro-House", "Dance Hall",
+           # 126-147: Even more esoteric Winamp extensions
+           "Goa", "Drum & Bass", "Club House", "Hardcore", "Terror", "Indie", 
+           "BritPop", "Negerpunk", "Polsk Punk", "Beat", "Christian Gangsta Rap", 
+           "Heavy Metal", "Black Metal", "Crossover", "Contemporary Christian", 
+           "Christian Rock", "Merengue", "Salsa", "Thrash Metal", "Anime", 
+           "JPop", "Synthpop") 
 
 _tag_versions = {
     2: Tag22,
@@ -1661,6 +1764,109 @@ def register_frame(cls):
     for version in _tag_versions:
         if cls._in_version(version):
             _tag_versions[version].known_frames[cls.__name__] = cls
+
+
+# File operations
+
+def _replace_chunk(filename, offset, length, chunk, in_place=True, max_mem=5):
+    """Replace length bytes of data with chunk, starting at offset.
+
+    If in_place is true, the operation works directly on the original file;
+    this is fast but an error or interrupt may lead to a corrupt file.  If
+    in_place is false, the function prepares a copy first, then renames it
+    back over the original file.  This method is slower, but it prevents
+    corruption on systems with atomic renames (UNIX), and reduces the window
+    of vulnerability elsewhere (Windows).
+
+    If there is no need to move data that is not being replaced, then there
+    is no chance of serious corruption, and thus we use the direct method 
+    ignoring in_place.
+    """
+    def copy_chunk(src, dst, length):
+        "Copy length bytes from file src to file dst."
+        BUFSIZE = 128 * 1024
+        while length > 0:
+            l = min(BUFSIZE, length)
+            buf = src.read(l)
+            dst.write(buf)
+            length -= l
+
+    file = open(filename, "rb+")
+    try:
+        # If the sizes match, we can simply overwrite the original data.
+        if length == len(chunk):
+            file.seek(offset)
+            file.write(chunk)
+            return
+
+        oldsize = file.seek(0, 2)
+        newsize = oldsize - length + len(chunk)
+
+        # If the orig chunk is exactly at the end of the file, we can
+        # simply truncate the file and then append the new chunk.
+        if offset + length == oldsize:
+            file.seek(offset)
+            file.truncate()
+            file.write(chunk)
+            return
+
+        if in_place:
+            if newsize > oldsize:
+                file.seek(0, 2)
+                file.write(b"\x00" * (len(chunk) - length))
+            file.seek(0)
+            try:
+                import mmap
+                m = mmap.mmap(file.fileno(), max(oldsize, newsize))
+                try:
+                    m.move(offset + len(chunk), 
+                           offset + length, 
+                           oldsize - offset - length)
+                    m[offset:offset + len(chunk)] = chunk
+                finally:
+                    m.close()
+            except (ImportError, EnvironmentError, ValueErro):
+                # mmap didn't work.  Let's load the tail into a tempfile
+                # and construct the result from there.
+                file.seek(offset + length)
+                temp = tempfile.SpooledTemporaryFile(max_size=max_mem * (1<<20),
+                                                     prefix="stagger-",
+                                                     suffix=".tmp")
+                try:
+                    copy_chunk(file, temp, oldsize - offset - length)
+                    file.seek(offset)
+                    file.truncate()
+                    file.write(chunk)
+                    temp.seek(0)
+                    copy_chunk(temp, file, oldsize - offset - length)
+                finally:
+                    temp.close()
+                return
+            else:
+                # mmap did work, we just need to truncate any leftover parts
+                # at the end
+                file.truncate(newsize)
+                return
+        else: # not in_place
+            temp = tempfile.NamedTemporaryFile(dir=os.path.dirname(filename),
+                                               prefix="stagger-",
+                                               suffix=".tmp",
+                                               delete=False)
+            try:
+                file.seek(0)
+                copy_chunk(file, temp, offset)
+                temp.write(chunk)
+                file.seek(offset + length)
+                copy_chunk(file, temp, oldsize - offset - length)
+            finally:
+                temp.close()
+                file.close()
+            shutil.copymode(filename, temp.name)
+            shutil.move(temp.name, filename)
+            return
+    finally:
+        if not file.closed:
+            file.close()
 
 # Package initialization
 
