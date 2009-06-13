@@ -5,6 +5,7 @@ import os
 import random
 import warnings
 import sys
+import shutil
 
 warnings.simplefilter("always", stagger.Warning)
 #warnings.simplefilter("error", stagger.Warning)
@@ -66,3 +67,15 @@ def test_encode(file):
             print("    ==> {0}/{1}{2}".format(len(data),
                                               data[:30],
                                               "..." if len(data) > 30 else ""))
+
+
+def t(filename, tag, out="test.mp3"):
+    warnings.simplefilter("always")
+    shutil.copy(filename, out)
+    frames = stagger.read(filename)
+    print([f.frameid for f in frames])
+    tag.write(out, frames)
+    print("------------")
+    frames2 = stagger.read(out)
+    print([f.frameid for f in frames2])
+
