@@ -40,6 +40,7 @@ import imghdr
 import tempfile
 import os.path
 import shutil
+import io
 
 __all__ = ["read"]
 
@@ -60,7 +61,6 @@ def xread(file, length):
     if len(data) != length:
         raise EOFError
     return data
-
 class Unsync:
     @staticmethod
     def gen_decode(iterable):
@@ -167,7 +167,7 @@ class Int8:
             data.extend([0] * (abs(width) - len(data)))
         data.reverse()
         return data
-    
+
 class Tag(metaclass=abc.ABCMeta):
     known_frames = {}
     
@@ -224,8 +224,61 @@ class Tag(metaclass=abc.ABCMeta):
             return UnknownFrame._from_data(frameid, data, flags)
 
     @classmethod
-    def _bake_tag(cls, frames, flags=None, size_hint=None, padding_default=0, padding_max=0): 
+    def _prepare_framedict(cls, framedict):
+        pass
+
+    @classmethod
+    def _prepare_frames(cls, frames):
+        # Generate dictionary of frames
+        d = dict()
+        for frame in frames:
+            l = d.get(frame.frameid, [])
+            l.append(frame)
+            d[frame.frameid] = l
+        
+        # Merge duplicate frames
+        for frameid in d.keys():
+            d[frameid] = d[frameid][0]._merge(d[frameid])
+
+        cls._prepare_framedict(d)
+
+        # Convert frames
+        d2 = dict()
+        for frameid in d.keys():
+            fs = []
+            try:
+                for frame in d[frameid]:
+                    fs.append(frame._to_version(cls.version))
+            except IncompatibleFrameError:
+                warn("Skipping incompatible frame {0}".format(frameid))
+            except ValueError as e:
+                warn("Skipping invalid frame {0} ({1})".format(frameid, e))
+            else:
+                d2[frameid] = fs
+        
+        # Sort frames
+        newframes = []
+        for fs in d2.values():
+            for f in fs:
+                assert isinstance(f, Frame)
+                newframes.append(f)
+        newframes.sort(key=frame_order.key)
+        return newframes
+
+    @classmethod
+    def _bake_tag(cls, frames, flags, 
+                  padding_default, padding_max, size_hint=None): 
         raise NotImplemented
+
+    @classmethod
+    def write(cls, filename, frames, flags=None, 
+              padding_default=1024, padding_max=10240):
+        frames = cls._prepare_frames(frames)
+        with _opened(filename, "rb+") as file:
+            (offset, length) = _tag_chunk(file)
+            tag_data = cls._bake_tag(frames, flags, padding_default, padding_max,
+                                     size_hint=length)
+            _replace_chunk(file, offset, length, tag_data)
 
 class Tag22(Tag):
     version = 2
@@ -288,12 +341,12 @@ class Tag22(Tag):
         return data
 
     @classmethod
-    def _bake_tag(cls, frames, flags=None, size_hint=None, padding_default=0, padding_max=0): 
+    def _bake_tag(cls, frames, flags, 
+                  padding_default, padding_max, size_hint=None ): 
         if flags == None: flags = {}
 
-        framedata = bytearray().join(
-            cls._encode_one_frame(frame._to_version(cls.version)) 
-            for frame in frames)
+        framedata = bytearray().join(cls._encode_one_frame(frame)
+                                     for frame in frames)
         if "unsynchronisation" in flags:
             framedata = Unsync.encode(framedata)
         
@@ -431,7 +484,7 @@ class Tag23(Tag):
         data = bytearray()
         # Frame id
         if len(frame.frameid) != 4 or not cls._is_frame_id(frame.frameid.encode("ASCII")):
-            raise "Invalid ID3v2.3 frame id {0}".format(repr(frame.frameid))
+            raise ValueError("Invalid ID3v2.3 frame id {0}".format(repr(frame.frameid)))
         data.extend(frame.frameid.encode("ASCII"))
         # Size
         data.extend(Int8.encode(len(frameinfo) + len(framedata), width=4))
@@ -445,15 +498,15 @@ class Tag23(Tag):
         return data
 
     @classmethod
-    def _bake_tag(cls, frames, flags=None, size_hint=None, padding_default=0, padding_max=0): 
+    def _bake_tag(cls, frames, flags, 
+                  padding_default, padding_max, size_hint=None ): 
         if flags == None: flags = {}
 
         if "unsynchronisation" in flags:
             for frame in frames: frame.flags["unsynchronisation"] = True
-        framedata = bytearray().join(
-            cls._encode_one_frame(frame._to_version(cls.version)) 
-            for frame in frames)
-        
+        framedata = bytearray().join(cls._encode_one_frame(frame)
+                                     for frame in frames)
+
         size = len(framedata)
         if (size_hint != None and size < size_hint 
             and (padding_max == None or size_hint - size <= padding_max)):
@@ -462,7 +515,7 @@ class Tag23(Tag):
             size += padding_default
 
         data = bytearray()
-        data.extend(b"ID3\x04\x00")
+        data.extend(b"ID3\x03\x00")
         flagval = 0x00
         if "unsynchronisation" in flags:
             flagval |= 0x80
@@ -692,12 +745,12 @@ class Tag24(Tag):
         return data
 
     @classmethod
-    def _bake_tag(cls, frames, flags=None, size_hint=None, padding_default=0, padding_max=0): 
+    def _bake_tag(cls, frames, flags, 
+                  padding_default, padding_max, size_hint=None ): 
         if flags == None: flags = {}
 
-        framedata = bytearray().join(
-            cls._encode_one_frame(frame._to_version(cls.version)) 
-            for frame in frames)
+        framedata = bytearray().join(cls._encode_one_frame(frame)
+                                     for frame in frames)
         if "unsynchronisation" in flags:
             framedata = Unsync.encode(framedata)
         
@@ -709,7 +762,7 @@ class Tag24(Tag):
             size += padding_default
 
         data = bytearray()
-        data.extend(b"ID3\x03\x00")
+        data.extend(b"ID3\x04\x00")
         flagval = 0x00
         if "unsynchronisation" in flags:
             flagval |= 0x80
@@ -733,6 +786,7 @@ class Spec:
     def write(self, frame, value): pass
 
     def validate(self, frame, value):
+        self.write(frame, value)
         return value
 
     def to_str(self, value):
@@ -744,10 +798,8 @@ class ByteSpec(Spec):
     def write(self, frame, value):
         return bytes([value])
     def validate(self, frame, value):
-        if value is not int:
+        if not isinstance(value, int) or value not in range(256):
             raise ValueError("Not a byte")
-        if value not in range(256):
-            raise ValueError("Invalid byte value")
         return value
 
 class IntegerSpec(Spec):
@@ -760,9 +812,6 @@ class IntegerSpec(Spec):
         if type(value) is not int: 
             raise ValueError("Not an integer: {0}".format(repr(value)))
         return Int8.encode(value, width=self.width)
-    def validate(self, frame, value):
-        self.write(frame, value)
-        return value
 
 class SignedIntegerSpec(Spec):
     def __init__(self, name, width):
@@ -775,15 +824,15 @@ class SignedIntegerSpec(Spec):
             val -= (1 << (self.width << 3))
         return val, data[self.width:]
     def write(self, frame, value):
-        if value is not int: raise ValueError("Not an integer")
-        if value >= (1 << ((self.width << 3) - 1)): raise ValueError("Value too large")
-        if value < -(1 << ((self.width << 3) - 1)): raise ValueError("Value too small")
+        if type(value) is not int: 
+            raise ValueError("Not an integer") 
+        if value >= (1 << ((self.width << 3) - 1)): 
+            raise ValueError("Value too large")
+        if value < -(1 << ((self.width << 3) - 1)): 
+            raise ValueError("Value too small")
         if val < 0:
             val += (1 << (self.width << 3))
         return Int8.encode(val, self.width)
-    def validate(self, frame, value):
-        self.write(frame, value)
-        return value
 
 class VarIntSpec(Spec):
     def read(self, frame, data):
@@ -792,20 +841,23 @@ class VarIntSpec(Spec):
         bytes = (bits + 7) >> 3
         return Int8.decode(data[:bytes]), data
     def write(self, frame, value):
+        if type(value) is not int:
+            raise ValueError("Not an integer")
+        if value < 0:
+            raise ValueError("Value must be nonnegative")
         bytes = 0
         t = value
         while t > 0:
             t >> 32
             bytes += 4
         return Int8.encode(bytes * 8, 1) + Int8.encode(value, width=bytes)
-    def validate(self, frame, value):
-        self.write(frame, value)
-        return value
 
 class BinaryDataSpec(Spec):
     def read(self, frame, data):
         return data, bytes()
     def write(self, frame, value):
+        if not isinstance(value, collections.ByteString):
+            raise ValueError("Data must be a byte sequence")
         return bytes(value)
     def to_str(self, value):
         return '{0}={1}{2}'.format(self.name, value[0:16], "..." if len(value) > 16 else "")
@@ -821,10 +873,13 @@ class SimpleStringSpec(Spec):
             return b"\x00" * self.length
         data =  value.encode('iso-8859-1')
         if len(data) != self.length:
-            raise ValueError("Invalid string({0}) data: {1}".format(self.length, value))
+            raise ValueError("String length mismatch")
         return data
     def validate(self, frame, value):
-        if len(value) != self.length: raise ValueError("String length mismatch")
+        if not isinstance(value, str):
+            raise ValueError("Not a string")
+        if len(value) != self.length: 
+            raise ValueError("String length mismatch")
         return value
 
 class LanguageSpec(SimpleStringSpec):
@@ -850,6 +905,7 @@ class URLStringSpec(Spec):
         return value.encode('iso-8859-1') + b"\x00"
 
 class EncodingSpec(ByteSpec):
+    "EncodingSpec must be the first spec."
     def read(self, frame, data):
         enc, data = super().read(frame, data)
         if enc & 0xFC:
@@ -867,11 +923,8 @@ class EncodedStringSpec(Spec):
                   ('utf-16', b"\x00\x00"),
                   ('utf-16be', b"\x00\x00"),
                   ('utf-8', b"\x00"))
+    preferred_encodings = (0, 1)
 
-    def __widechars(self, data):
-        for i in range(0, len(data), 2):
-            yield data[i:i+2]
-        
     def read(self, frame, data):
         enc, term = self._encodings[frame.encoding]
         if len(term) == 1:
@@ -889,28 +942,45 @@ class EncodedStringSpec(Spec):
         return rawstr.decode(enc), data
 
     def write(self, frame, value):
-        enc, term = self._encodings[frame.encoding]
-        return value.encode(enc) + term
+        if frame.encoding != None:
+            enc, term = self._encodings[frame.encoding]
+            return value.encode(enc) + term
+        else:
+            enc, term = self._encodings[frame.encoding]
+            return value.encode(enc) + term
+    def validate(self, frame, value):
+        if not isinstance(value, str):
+            raise ValueError("Not a string")
+        return value
 
 class EncodedFullTextSpec(EncodedStringSpec):
     pass # TODO
 
 class SequenceSpec(Spec):
+    """Recognizes a sequence of values, all of the same spec."""
     def __init__(self, name, spec):
         super().__init__(name)
         self.spec = spec
+
     def read(self, frame, data):
+        "Returns a list of values, eats all of data."
         seq = []
         while data:
             elem, data = self.spec.read(frame, data)
             seq.append(elem)
         return seq, data
+
     def write(self, frame, values):
+        if isinstance(values, str):
+            return self.spec.write(frame, values)
         data = bytearray()
         for v in values:
             data.extend(self.spec.write(frame, v))
         return data
+
     def validate(self, frame, values):
+        if isinstance(values, str):
+            values = [values]
         for v in values:
             self.spec.validate(frame, v)
         return values
@@ -943,6 +1013,7 @@ class MultiSpec(Spec):
 class Frame(metaclass=abc.ABCMeta):
     _framespec = tuple()
     _version = tuple()
+    _allow_duplicates = False
     
     def __init__(self, frameid=None, flags=None, **kwargs):
         self.frameid = frameid if frameid else type(self).__name__
@@ -972,6 +1043,15 @@ class Frame(metaclass=abc.ABCMeta):
         return new
 
     @classmethod
+    def _merge(cls, frames):
+        if cls._allow_duplicates:
+            return frames
+        else:
+            if len(frames) > 1:
+                warn("Frame {0} duplicated, only the last instance is kept".format(frames[0].frameid))
+            return frames[-1:]
+
+    @classmethod
     def _in_version(self, version):
         return (self._version == version
                 or (isinstance(self._version, collections.Container) 
@@ -991,10 +1071,31 @@ class Frame(metaclass=abc.ABCMeta):
     def _to_data(self):
         if getattr(self, "_bozo", False):
             warn("General support for frame {0} is virtually nonexistent; its use is discouraged".format(self.frameid), BozoFrameWarning)
-        data = bytearray()
-        for spec in self._framespec:
-            data.extend(spec.write(self, getattr(self, spec.name)))
-        return data
+        
+        def encode():
+            data = bytearray()
+            for spec in self._framespec:
+                data.extend(spec.write(self, getattr(self, spec.name)))
+            return data
+
+        def try_preferred_encodings():
+            for encoding in EncodedStringSpec.preferred_encodings:
+                try:
+                    self.encoding = encoding
+                    return encode()
+                except UnicodeEncodeError:
+                    pass
+                finally:
+                    self.encoding = None
+            raise ValueError("Could not encode strings")
+        
+        if isinstance(self._framespec[0], EncodingSpec) and self.encoding == None:
+            return try_preferred_encodings()
+        else:
+            try:
+                return encode()
+            except UnicodeEncodeError:
+                return try_preferred_encodings()
 
     def __repr__(self):
         stype = type(self).__name__
@@ -1044,6 +1145,13 @@ class TextFrame(Frame):
         return "{0} {1}".format(EncodedStringSpec._encodings[self.encoding][0],
                                 ", ".join(repr(t) for t in self.text))
 
+    @classmethod
+    def _merge(cls, frames):
+        frame = cls(text=[])
+        for f in frames:
+            frame.text.extend(f.text)
+        return [frame]
+
 class URLFrame(Frame):
     _framespec = (URLStringSpec("url"), )
     def _str_fields(self):
@@ -1062,6 +1170,7 @@ class CreditsFrame(Frame):
 class UFID(Frame):
     "Unique file identifier"
     _framespec = (NullTerminatedStringSpec("owner"), BinaryDataSpec("data"))
+    _allow_duplicates = True
 
 class TIT1(TextFrame): 
     "Content group description"
@@ -1199,13 +1308,17 @@ class TDTG(TextFrame):
     # timestamp
     _version = 4
 
-class TSSE(TextFrame): "Software/Hardware and settings used for encoding"
+class TSSE(TextFrame): 
+    "Software/Hardware and settings used for encoding"
+
 class TSOA(TextFrame):
     "Album sort order"
     _version = 4
+
 class TSOP(TextFrame):
     "Performer sort order"
     _version = 4
+
 class TSOT(TextFrame):
     "Title sort order"
     _version = 4
@@ -1218,24 +1331,43 @@ class TXXX(Frame):
     _framespec = (EncodingSpec("encoding"),
                   EncodedStringSpec("description"),
                   EncodedStringSpec("value"))
+    _allow_duplicates = True
 
 
 # 4.3. URL link frames
 
-class WCOM(URLFrame): "Commercial information"
-class WCOP(URLFrame): "Copyright/Legal information"
-class WOAF(URLFrame): "Official audio file webpage"
-class WOAR(URLFrame): "Official artist/performer webpage"
-class WOAS(URLFrame): "Official audio source webpage"
-class WORS(URLFrame): "Official Internet radio station homepage"
-class WPAY(URLFrame): "Payment"
-class WPUB(URLFrame): "Publishers official webpage"
+class WCOM(URLFrame): 
+    "Commercial information"
+    _allow_duplicates = True
+
+class WCOP(URLFrame): 
+    "Copyright/Legal information"
+
+class WOAF(URLFrame): 
+    "Official audio file webpage"
+
+class WOAR(URLFrame): 
+    "Official artist/performer webpage"
+    _allow_duplicates = True
+
+class WOAS(URLFrame): 
+    "Official audio source webpage"
+
+class WORS(URLFrame): 
+    "Official Internet radio station homepage"
+
+class WPAY(URLFrame): 
+    "Payment"
+
+class WPUB(URLFrame): 
+    "Publishers official webpage"
 
 class WXXX(Frame):
     "User defined URL link frame"
     _framespec = (EncodingSpec("encoding"),
                   EncodedStringSpec("description"),
                   URLStringSpec("url"))
+    _allow_duplicates = True
 
 
 # 4.4.-4.13  Junk frames
@@ -1269,14 +1401,16 @@ class USLT(Frame):
     "Unsynchronised lyric/text transcription"
     _framespec = (EncodingSpec("encoding"), LanguageSpec("lang"),
                   EncodedStringSpec("desc"), EncodedFullTextSpec("text"))
+    _allow_duplicates = True
     _untested = True
-
+    
 class SYLT(Frame):
     "Synchronised lyric/text"
     _framespec = (EncodingSpec("encoding"), LanguageSpec("lang"),
                   ByteSpec("format"), ByteSpec("type"),
                   EncodedStringSpec("desc"),
                   MultiSpec("data", EncodedFullTextSpec("text"), IntegerSpec("timestamp", 4)))
+    _allow_duplicates = True
     _untested = True
     _bozo = True
 
@@ -1284,6 +1418,7 @@ class COMM(Frame):
     "Comments"
     _framespec = (EncodingSpec("encoding"), LanguageSpec("lang"),
                   EncodedStringSpec("desc"), EncodedFullTextSpec("text"))
+    _allow_duplicates = True
 
 class RVA2(Frame):
     "Relative volume adjustment (2)"
@@ -1292,6 +1427,7 @@ class RVA2(Frame):
                             ByteSpec("channel"),
                             IntegerSpec("gain", 2),  # * 512
                             VarIntSpec("peak")))
+    _allow_duplicates = True
     _untested = True
 
 class EQU2(Frame):
@@ -1300,6 +1436,7 @@ class EQU2(Frame):
                   MultiSpec("adjustments",
                             IntegerSpec("frequency", 2), # in 0.5Hz
                             SignedIntegerSpec("adjustment", 2))) # * 512x
+    _allow_duplicates = True
     _untested = True
     _bozo = True
 
@@ -1321,6 +1458,18 @@ class APIC(Frame):
                   ByteSpec("type"),
                   EncodedStringSpec("desc"),
                   BinaryDataSpec("data"))
+    _allow_duplicates = True
+
+    def _to_version(self, version):
+        if version in (3, 4):
+            return self
+        if self.mime.lower() not in ("image/jpeg", "image/jpg", "image/png"):
+            raise ValueError("Unsupported image format")
+        return PIC(format="PNG" if self.mime.lower() == "image/png" else "JPG",
+                   type=self.type,
+                   desc=self.desc,
+                   data=self.data)
+            
     def _str_fields(self):
         img = "{0} bytes of {1} data".format(len(self.data), 
                                              imghdr.what(None, self.data[:32]))
@@ -1338,6 +1487,7 @@ class GEOB(Frame):
                   EncodedStringSpec("filename"),
                   EncodedStringSpec("desc"),
                   BinaryDataSpec("data"))
+    _allow_duplicates = True
 
 class PCNT(Frame):
     "Play counter"
@@ -1348,6 +1498,7 @@ class POPM(Frame):
     _framespec = (NullTerminatedStringSpec("email"),
                   ByteSpec("rating"),
                   IntegerSpec("count", 4))
+    _allow_duplicates = True
 
 class RBUF(Frame):
     "Recommended buffer size"
@@ -1364,6 +1515,7 @@ class AENC(Frame):
                   IntegerSpec("preview_start", 2),
                   IntegerSpec("preview_length", 2),
                   BinaryDataSpec("data"))
+    _allow_duplicates = True
     _untested = True
     _bozo = True
 
@@ -1373,6 +1525,7 @@ class LINK(Frame):
                   NullTerminatedStringSpec("url"),
                   # optional
                   BinaryDataSpec("data"))
+    _allow_duplicates = True
     _untested = True
     _bozo = True
 
@@ -1389,6 +1542,7 @@ class USER(Frame):
     _framespec = (EncodingSpec("encoding"),
                   LanguageSpec("lang"),
                   EncodedStringSpec("text"))
+    _allow_duplicates = True
 
 class OWNE(Frame):
     "Ownership frame"
@@ -1410,6 +1564,7 @@ class COMR(Frame):
                   EncodedStringSpec("desc"),
                   NullTerminatedStringSpec("mime"),
                   BinaryDataSpec("logo"))
+    _allow_duplicates = True
     _untested = True
     _bozo = True
 
@@ -1418,6 +1573,7 @@ class ENCR(Frame):
     _framespec = (NullTerminatedStringSpec("owner"),
                   ByteSpec("symbol"),
                   BinaryDataSpec("data"))
+    _allow_duplicates = True
     _untested = True
     _bozo = True
 
@@ -1427,6 +1583,7 @@ class GRID(Frame):
     _framespec = (NullTerminatedStringSpec("owner"),
                   ByteSpec("symbol"),
                   BinaryDataSpec("data"))
+    _allow_duplicates = True
     _untested = True
     _bozo = True
 
@@ -1434,11 +1591,13 @@ class PRIV(Frame):
     "Private frame"
     _framespec = (NullTerminatedStringSpec("owner"),
                   BinaryDataSpec("data"))
+    _allow_duplicates = True
 
 class SIGN(Frame):
     "Signature frame"
     _framespec = (ByteSpec("group"),
                   BinaryDataSpec("data"))
+    _allow_duplicates = True
     _untested = True
     _bozo = True
     _version = 4
@@ -1479,6 +1638,13 @@ class ASPI(Frame):
 
 # ID3v2.3
 
+class TYER(TextFrame):
+    """Year
+    A numerical string with the year of the recording.
+    Replaced by TDRC in id3v2.4
+    """
+    _version = 3
+    
 class TDAT(TextFrame):
     """Date
     A numerical string in DDMM format containing the date for the recording.
@@ -1512,13 +1678,6 @@ class TSIZ(TextFrame):
     """
     _version = 3
 
-class TYER(TextFrame):
-    """Year
-    A numerical string with the year of the recording.
-    Replaced by TDRC in id3v2.4
-    """
-    _version = 3
-    
 class IPLS(CreditsFrame):
     """Involved people list
     Replaced by TMCL and TIPL in id3v2.4
@@ -1616,9 +1775,26 @@ class PIC(Frame):
     _framespec = (EncodingSpec("encoding"),
                   SimpleStringSpec("format", 3),
                   ByteSpec("type"),
-                  NullTerminatedStringSpec("desc"),
+                  EncodedStringSpec("desc"),
                   BinaryDataSpec("data"))
+    _allow_duplicates = True
     _version = 2
+
+    def _to_version(self, version):
+        if version == 2:
+            return self
+        assert version in (3, 4)
+        if self.format.upper() == "PNG":
+            mime = "image/png"
+        elif self.format.upper() == "JPG":
+            mime = "image/jpeg"
+        else:
+            mime = imghdr.what(io.StringIO(self.data))
+            if mime == None:
+                raise ValueError("Unknown image format")
+            mime = "image/" + mime.lower()
+        return APIC(mime=mime, type=self.type, desc=self.desc, data=self.data)
+        
     def _str_fields(self):
         img = "{0} bytes of {1} data".format(len(self.data), 
                                                imghdr.what(None, self.data[:32]))
@@ -1655,28 +1831,42 @@ class LNK(Frame):
     _version = 2
 
 # Nonstandard frames
-class TCMP(TextFrame): "iTunes: Part of a compilation"
+class TCMP(TextFrame): 
+    "iTunes: Part of a compilation"
+    _nonstandard = True
+
 class TCP(TCMP): pass
 
-class TDES(TextFrame): "iTunes: Podcast description"
+class TDES(TextFrame): 
+    "iTunes: Podcast description"
+    _nonstandard = True
 class TDS(TDES): pass
 
-class TGID(TextFrame): "iTunes: Podcast identifier"
+class TGID(TextFrame): 
+    "iTunes: Podcast identifier"
+    _nonstandard = True
 class TID(TGID): pass
 
-class TDRL(TextFrame): "iTunes: Podcast release date"
+class TDRL(TextFrame): 
+    "iTunes: Podcast release date"
+    _nonstandard = True
 class TDR(TGID): pass
 
-class WFED(URLFrame): "iTunes: Podcast feed URL"
+class WFED(URLFrame): 
+    "iTunes: Podcast feed URL"
+    _nonstandard = True
 class WFD(WFED): pass
 
-class TCAT(TextFrame): "iTunes: Podcast category"
+class TCAT(TextFrame): 
+    "iTunes: Podcast category"
+    _nonstandard = True
 class TCT(TCAT): pass
 
 class TKWD(TextFrame): 
     """iTunes: Podcast keywords
     Comma-separated list of keywords.
     """
+    _nonstandard = True
 class TKW(TKWD): pass
 
 class PCST(Frame):
@@ -1686,51 +1876,101 @@ class PCST(Frame):
     Value should be zero.
     """
     _framespec = (IntegerSpec("value", 4),)
+    _nonstandard = True
 class PCS(PCST): pass
 
+class FrameOrder:
+    """Order frames based on their position in a predefined list of patterns.
+    
+    A pattern may be a frame class, or a regular expression that is to be 
+    matched against the frame id.
+
+    >>> order = FrameOrder(TIT1, "T.*", TXXX)
+    >>> order.key(TIT1())
+    (0,)
+    >>> order.key(TPE1())
+    (1,)
+    >>> order.key(TXXX())
+    (2,)
+    >>> order.key(APIC())
+    (3,)
+    """
+    def __init__(self, *patterns):
+        self.re_keys = []
+        self.frame_keys = dict()
+        for (i, pattern) in zip(range(len(patterns)), patterns):
+            if isinstance(pattern, str):
+                self.re_keys.append((pattern, (i,)))
+            else:
+                assert issubclass(pattern, Frame)
+                self.frame_keys[pattern] = (i,)
+        self.unknown_key = (i + 1,)
+
+    def key(self, frame):
+        "Return the sort key for the given frame."
+        # Look up frame by exact match
+        if type(frame) in self.frame_keys:
+            return self.frame_keys[type(frame)]
+
+        # Look up parent frame for v2.2 frames
+        if frame._in_version(2) and type(frame).__bases__[0] in self.frame_keys:
+            return self.frame_keys[type(frame).__bases__[0]]
+        
+        # Try each pattern
+        for (pattern, key) in self.re_keys:
+            if re.match(pattern, frame.frameid):
+                return key
+        
+        return self.unknown_key
+
+frame_order = FrameOrder(TIT2, TPE1, TALB, TRCK, TCOM, TPOS,
+                         TDRC, TYER, TRDA, TDAT, TIME, 
+                         "T.*", COMM, "W*", TXXX, WXXX,
+                         UFID, PCNT, POPM, 
+                         APIC, PIC, GEOB, PRIV,
+                         ".*",)
 
 # Attached picture (APIC & PIC) types
-picture_types = ["Other", "32x32 icon", "Other icon", "Front Cover", 
-                 "Back Cover", "Leaflet", "Media", "Lead artist", "Artist", 
-                 "Conductor", "Band/Orchestra", "Composer", 
-                 "Lyricist/text writer", "Recording Location", "Recording", 
-                 "Performance", "Screen capture", "A bright coloured fish", 
-                 "Illustration", "Band/artist", "Publisher/Studio"]
+picture_types = [
+    "Other", "32x32 icon", "Other icon", "Front Cover", "Back Cover", 
+    "Leaflet", "Media", "Lead artist", "Artist", "Conductor", 
+    "Band/Orchestra", "Composer", "Lyricist/text writer", 
+    "Recording Location", "Recording", "Performance", "Screen capture", 
+    "A bright coloured fish", "Illustration", "Band/artist", 
+    "Publisher/Studio"]
 
 # ID3v1 genre list
-genres = ( "Blues", "Classic Rock", "Country", "Dance", "Disco", "Funk",
-           "Grunge", "Hip-Hop", "Jazz", "Metal", "New Age", "Oldies", 
-           "Other", "Pop", "R&B", "Rap", "Reggae", "Rock", "Techno", 
-           "Industrial", "Alternative", "Ska", "Death Metal", "Pranks", 
-           "Soundtrack", "Euro-Techno", "Ambient", "Trip-Hop", "Vocal", 
-           "Jazz+Funk", "Fusion", "Trance", "Classical", "Instrumental", 
-           "Acid", "House", "Game", "Sound Clip","Gospel", "Noise", 
-           "AlternRock", "Bass", "Soul", "Punk", "Space", "Meditative", 
-           "Instrumental Pop", "Instrumental Rock", "Ethnic", "Gothic", 
-           "Darkwave", "Techno-Industrial", "Electronic", "Pop-Folk", 
-           "Eurodance", "Dream", "Southern Rock", "Comedy", "Cult",
-           "Gangsta", "Top 40", "Christian Rap", "Pop/Funk", "Jungle",
-           "Native American", "Cabaret", "New Wave", "Psychadelic",
-           "Rave", "Showtunes", "Trailer", "Lo-Fi", "Tribal", "Acid Punk", 
-           "Acid Jazz", "Polka", "Retro", "Musical", "Rock & Roll", 
-           "Hard Rock",
-           # 80-125: Winamp extensions
-           "Folk", "Folk-Rock", "National Folk", "Swing", "Fast Fusion", 
-           "Bebob", "Latin", "Revival", "Celtic", "Bluegrass", "Avantgarde",
-           "Gothic Rock", "Progressive Rock", "Psychedelic Rock", 
-           "Symphonic Rock", "Slow Rock", "Big Band", "Chorus", 
-           "Easy Listening", "Acoustic", "Humour", "Speech", "Chanson",
-           "Opera", "Chamber Music", "Sonata", "Symphony", "Booty Bass",
-           "Primus", "Porn Groove", "Satire", "Slow Jam", "Club", "Tango",
-           "Samba", "Folklore", "Ballad", "Power Ballad", "Rhythmic Soul",
-           "Freestyle", "Duet", "Punk Rock", "Drum Solo", "A capella",
-           "Euro-House", "Dance Hall",
-           # 126-147: Even more esoteric Winamp extensions
-           "Goa", "Drum & Bass", "Club House", "Hardcore", "Terror", "Indie", 
-           "BritPop", "Negerpunk", "Polsk Punk", "Beat", "Christian Gangsta Rap", 
-           "Heavy Metal", "Black Metal", "Crossover", "Contemporary Christian", 
-           "Christian Rock", "Merengue", "Salsa", "Thrash Metal", "Anime", 
-           "JPop", "Synthpop") 
+genres = ( 
+    "Blues", "Classic Rock", "Country", "Dance", "Disco", "Funk", "Grunge", 
+    "Hip-Hop", "Jazz", "Metal", "New Age", "Oldies", "Other", "Pop", "R&B", 
+    "Rap", "Reggae", "Rock", "Techno", "Industrial", "Alternative", "Ska", 
+    "Death Metal", "Pranks", "Soundtrack", "Euro-Techno", "Ambient", 
+    "Trip-Hop", "Vocal", "Jazz+Funk", "Fusion", "Trance", "Classical", 
+    "Instrumental", "Acid", "House", "Game", "Sound Clip","Gospel", "Noise", 
+    "AlternRock", "Bass", "Soul", "Punk", "Space", "Meditative", 
+    "Instrumental Pop", "Instrumental Rock", "Ethnic", "Gothic", "Darkwave", 
+    "Techno-Industrial", "Electronic", "Pop-Folk", "Eurodance", "Dream", 
+    "Southern Rock", "Comedy", "Cult", "Gangsta", "Top 40", "Christian Rap", 
+    "Pop/Funk", "Jungle", "Native American", "Cabaret", "New Wave", 
+    "Psychadelic", "Rave", "Showtunes", "Trailer", "Lo-Fi", "Tribal", 
+    "Acid Punk", "Acid Jazz", "Polka", "Retro", "Musical", "Rock & Roll", 
+    "Hard Rock",
+    # 80-125: Winamp extensions
+    "Folk", "Folk-Rock", "National Folk", "Swing", "Fast Fusion", "Bebob", 
+    "Latin", "Revival", "Celtic", "Bluegrass", "Avantgarde", "Gothic Rock", 
+    "Progressive Rock", "Psychedelic Rock", "Symphonic Rock", "Slow Rock", 
+    "Big Band", "Chorus", "Easy Listening", "Acoustic", "Humour", "Speech", 
+    "Chanson", "Opera", "Chamber Music", "Sonata", "Symphony", "Booty Bass",
+    "Primus", "Porn Groove", "Satire", "Slow Jam", "Club", "Tango", "Samba",
+    "Folklore", "Ballad", "Power Ballad", "Rhythmic Soul", "Freestyle", 
+    "Duet", "Punk Rock", "Drum Solo", "A capella", "Euro-House", 
+    "Dance Hall",
+    # 126-147: Even more esoteric Winamp extensions
+    "Goa", "Drum & Bass", "Club House", "Hardcore", "Terror", "Indie", 
+    "BritPop", "Negerpunk", "Polsk Punk", "Beat", "Christian Gangsta Rap", 
+    "Heavy Metal", "Black Metal", "Crossover", "Contemporary Christian", 
+    "Christian Rock", "Merengue", "Salsa", "Thrash Metal", "Anime", "JPop", 
+    "Synthpop") 
 
 _tag_versions = {
     2: Tag22,
@@ -1739,20 +1979,47 @@ _tag_versions = {
     }
           
 @contextmanager
-def read(filename):
-    file = open(filename, "rb")
-    try:
+def _opened(filename, mode):
+    if isinstance(filename, io.IOBase):
+        yield filename
+    else:
+        file = open(filename, mode)
+        try: 
+            yield file
+        finally: 
+            if not file.closed:
+                file.close()
+
+def _tag_chunk(filename):
+    with _opened(filename, "rb") as file:
+        start = file.tell()
+        try:
+            with lazy_read(file) as tag:
+                end = tag._fp_tag_end
+            return (start, end - start)
+        except NoTagError:
+            return (start, 0)
+        finally:
+            file.seek(start)
+
+@contextmanager
+def lazy_read(filename):
+    with _opened(filename, "rb") as file:
         header = file.peek(10)
         if len(header) < 10:
             raise EOFError
         if header[0:3] != b"ID3":
             raise NoTagError("ID3v2 tag not found")
         if header[3] not in _tag_versions or header[4] != 0:
-            raise NoTagError("Unknown ID3 version: 2.{0}.{1}".format(*header[3:5]))
+            raise TagError("Unknown ID3 version: 2.{0}.{1}".format(*header[3:5]))
         yield _tag_versions[header[3]](file)
-    finally:
-        file.close()
 
+def read(filename):
+    with lazy_read(filename) as tag:
+        return [frame for frame in tag.frames()]
+
+def write(filename, frames):
+    Tag24.write(filename, frames)
 
 def register_frame(cls):
     assert isinstance(cls, type) and issubclass(cls, Frame) and cls is not Frame
@@ -1772,15 +2039,15 @@ def _replace_chunk(filename, offset, length, chunk, in_place=True, max_mem=5):
     """Replace length bytes of data with chunk, starting at offset.
 
     If in_place is true, the operation works directly on the original file;
-    this is fast but an error or interrupt may lead to a corrupt file.  If
-    in_place is false, the function prepares a copy first, then renames it
-    back over the original file.  This method is slower, but it prevents
-    corruption on systems with atomic renames (UNIX), and reduces the window
-    of vulnerability elsewhere (Windows).
+    this is fast and works on opened files, but an error or interrupt may lead
+    to corrupt file contents.  If in_place is false, the function prepares a
+    copy first, then renames it back over the original file.  This method is
+    slower, but it prevents corruption on systems with atomic renames (UNIX),
+    and reduces the window of vulnerability elsewhere (Windows).
 
-    If there is no need to move data that is not being replaced, then there
-    is no chance of serious corruption, and thus we use the direct method 
-    ignoring in_place.
+    If there is no need to move data that is not being replaced, then we use
+    the direct method irrespective of in_place.  (In this case an interrupt
+    may only corrupt the chunk being replaced.)
     """
     def copy_chunk(src, dst, length):
         "Copy length bytes from file src to file dst."
@@ -1791,8 +2058,8 @@ def _replace_chunk(filename, offset, length, chunk, in_place=True, max_mem=5):
             dst.write(buf)
             length -= l
 
-    file = open(filename, "rb+")
-    try:
+    assert isinstance(filename, str) or in_place
+    with _opened(filename, "rb+") as file:
         # If the sizes match, we can simply overwrite the original data.
         if length == len(chunk):
             file.seek(offset)
@@ -1864,9 +2131,6 @@ def _replace_chunk(filename, offset, length, chunk, in_place=True, max_mem=5):
             shutil.copymode(filename, temp.name)
             shutil.move(temp.name, filename)
             return
-    finally:
-        if not file.closed:
-            file.close()
 
 # Package initialization
 
