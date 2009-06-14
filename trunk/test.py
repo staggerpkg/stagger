@@ -1,11 +1,12 @@
 #!/usr/bin/python3
 
-import stagger
 import os
 import random
 import warnings
 import sys
 import shutil
+
+import stagger
 
 warnings.simplefilter("always", stagger.Warning)
 #warnings.simplefilter("error", stagger.Warning)
@@ -44,11 +45,12 @@ def test(*roots, wait=False, randomize=False, limit=None, catch_errors=True):
 
     for mp3 in head(mp3s, limit):
         try:
+            print()
+            print("-" * 70)
+            print()
             print(mp3)
-            with stagger.lazy_read(mp3) as tag:
-                print(tag)
-                for frame in tag.frames():
-                    print("    " + str(frame))
+            for frame in stagger.read_tag(mp3):
+                print("    " + str(frame))
         except stagger.NoTagError:
             pass
         except Exception as e:
