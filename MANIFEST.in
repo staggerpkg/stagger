@@ -1,0 +1,5 @@
+include *.txt
+include README
+include LICENSE
+include AUTHORS
+include ChangeLog
