@@ -55,7 +55,7 @@ def replace_chunk(filename, offset, length, chunk, in_place=True, max_mem=5):
             length -= l
 
     assert isinstance(filename, str) or in_place
-    with _opened(filename, "rb+") as file:
+    with opened(filename, "rb+") as file:
         # If the sizes match, we can simply overwrite the original data.
         if length == len(chunk):
             file.seek(offset)
