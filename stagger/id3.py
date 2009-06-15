@@ -711,16 +711,23 @@ class PCST(Frames.Frame):
 class PCS(PCST): pass
 
 
-def _register_v22_names(module=None):
-    "Register v2.2 names of v2.3 & v2.4 frames based on class inheritance."
-    for obj in Frames.gen_frame_classes(module):
-        if obj._in_version(2):
-            base = obj.__bases__[0]
-            if issubclass(base, Frames.Frame) and base._in_version(3, 4):
-                assert not hasattr(base, "_v2_frame")
-                base._v2_frame = obj
+def _register_frames(module=None):
+    """Supply missing version fields and register v2.2 names 
+    of v2.3 & v2.4 frames based on class inheritance.
+    """
+    for obj in globals().values():
+        if Frames.is_frame_class(obj):
+            if len(obj.__name__) == 3:
+                obj._version = 2
+            if len(obj.__name__) == 4 and not obj._version:
+                obj._version = (3, 4)
+            if obj._in_version(2):
+                base = obj.__bases__[0]
+                if issubclass(base, Frames.Frame) and base._in_version(3, 4):
+                    assert not hasattr(base, "_v2_frame")
+                    base._v2_frame = obj
 
-_register_v22_names()
+_register_frames()
 
 
 # Attached picture (APIC & PIC) types
@@ -766,4 +773,5 @@ genres = (
     "Synthpop")
 
 
-__all__ = [ framecls.__name__ for framecls in Frames.gen_frame_classes()]
+__all__ = [ obj.__name__ for obj in globals().values() 
+            if Frames.is_frame_class(obj)]

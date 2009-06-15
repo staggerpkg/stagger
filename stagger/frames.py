@@ -6,6 +6,7 @@ import abc
 import collections
 from abc import abstractmethod
 
+from stagger.errors import *
 from stagger.specs import *
 
 class Frame(metaclass=abc.ABCMeta):
@@ -18,7 +19,7 @@ class Frame(metaclass=abc.ABCMeta):
         self.flags = flags if flags else {}
         for spec in self._framespec:
             val = kwargs.get(spec.name, None)
-            if val != None: spec.validate(self, val)
+            if val != None: val = spec.validate(self, val)
             setattr(self, spec.name, val)
 
     @classmethod
@@ -53,7 +54,7 @@ class Frame(metaclass=abc.ABCMeta):
     @classmethod
     def _in_version(self, *versions):
         "Returns true if this frame is defined in any of the specified versions of ID3."
-        for version in version:
+        for version in versions:
             if (self._version == version
                 or (isinstance(self._version, collections.Container) 
                     and version in self._version)):
@@ -107,7 +108,13 @@ class Frame(metaclass=abc.ABCMeta):
             args.append("frameid={0!r}".format(self.frameid))
         if self.flags:
             args.append("flags={0!r}".format(self.flags))
-        args.extend("{0}={1!r}".format(spec.name, getattr(self, spec.name)) for spec in self._framespec)
+        for spec in self._framespec:
+            if isinstance(spec, BinaryDataSpec):
+                data = getattr(self, spec.name)
+                args.append("{0}=<{1} bytes of binary data {2!r}{3}>".format(
+                        spec.name, len(data), data[:20], "..." if len(data) > 20 else ""))
+            else:
+                args.append("{0}={1!r}".format(spec.name, getattr(self, spec.name)))
         return "{0}({1})".format(stype, ", ".join(args))
 
     def _str_fields(self):
@@ -145,7 +152,8 @@ class TextFrame(Frame):
     _framespec = (EncodingSpec("encoding"),
                   SequenceSpec("text", EncodedStringSpec("text")))
     def _str_fields(self):
-        return "{0} {1}".format(EncodedStringSpec._encodings[self.encoding][0],
+        return "{0} {1}".format((EncodedStringSpec._encodings[self.encoding][0] 
+                                if self.encoding != None else "<undef>"),
                                 ", ".join(repr(t) for t in self.text))
 
     @classmethod
@@ -167,13 +175,8 @@ class CreditsFrame(Frame):
                             EncodedStringSpec("person")))
 
 
-def gen_frame_classes(module=None):
-    "A generator for all frame classes in the specified module."
-    d = module.__dict__ if module else globals()
-    for obj in d.values():
-        if (isinstance(obj, type)
-            and issubclass(obj, Frame)
-            and 3 <= len(obj.__name__) <= 4
-            and obj.__name__ == obj.__name__.upper()):
-            yield obj
-
+def is_frame_class(cls):
+    return (isinstance(cls, type)
+            and issubclass(cls, Frame)
+            and 3 <= len(cls.__name__) <= 4
+            and cls.__name__ == cls.__name__.upper())

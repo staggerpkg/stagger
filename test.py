@@ -35,7 +35,7 @@ def head(iterable, limit):
         for elem, i in zip(iterable, range(limit)):
             yield elem
 
-def test(*roots, wait=False, randomize=False, limit=None, catch_errors=True):
+def test(*roots, wait=False, randomize=False, limit=None, catch_errors=False):
     mp3s = list_mp3s(roots)
     warnings.simplefilter("error")
     if randomize:
@@ -49,7 +49,9 @@ def test(*roots, wait=False, randomize=False, limit=None, catch_errors=True):
             print("-" * 70)
             print()
             print(mp3)
-            for frame in stagger.read_tag(mp3):
+            tag = stagger.read_tag(mp3)
+            print(tag)
+            for frame in tag.values():
                 print("    " + str(frame))
         except stagger.NoTagError:
             pass
