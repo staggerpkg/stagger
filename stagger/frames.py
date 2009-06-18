@@ -24,7 +24,7 @@ class Frame(metaclass=abc.ABCMeta):
 
     @classmethod
     def _from_data(cls, frameid, data, flags=None):
-        frame = cls(frameid, flags)
+        frame = cls(frameid=frameid, flags=flags)
         if getattr(frame, "_untested", False):
             warn("Support for {0} is untested; please verify results".format(frameid), 
                  UntestedFrameWarning)
@@ -111,8 +111,12 @@ class Frame(metaclass=abc.ABCMeta):
         for spec in self._framespec:
             if isinstance(spec, BinaryDataSpec):
                 data = getattr(self, spec.name)
-                args.append("{0}=<{1} bytes of binary data {2!r}{3}>".format(
-                        spec.name, len(data), data[:20], "..." if len(data) > 20 else ""))
+                if isinstance(data, (bytes, bytearray)):
+                    args.append("{0}=<{1} bytes of binary data {2!r}{3}>".format(
+                            spec.name, len(data), 
+                            data[:20], "..." if len(data) > 20 else ""))
+                else:
+                    args.append(repr(data))
             else:
                 args.append("{0}={1!r}".format(spec.name, getattr(self, spec.name)))
         return "{0}({1})".format(stype, ", ".join(args))
@@ -151,6 +155,20 @@ class ErrorFrame(Frame):
 class TextFrame(Frame):
     _framespec = (EncodingSpec("encoding"),
                   SequenceSpec("text", EncodedStringSpec("text")))
+
+    def __init__(self, *values, frameid=None, flags=None, **kwargs):
+        def extract_strs(values):
+            if isinstance(values, str):
+                yield values
+            elif isinstance(values, collections.Iterable):
+                for val in values:
+                    for v in extract_strs(val):
+                        yield v
+            else:
+                raise ValueError("Invalid text frame value")
+        super().__init__(frameid=frameid, flags=flags, kwargs=kwargs)
+        self.text = list(extract_strs(values))
+
     def _str_fields(self):
         return "{0} {1}".format((EncodedStringSpec._encodings[self.encoding][0] 
                                 if self.encoding != None else "<undef>"),

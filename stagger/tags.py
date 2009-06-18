@@ -48,6 +48,11 @@ def read_tag(filename):
         return detect_tag(file)[0].read(file)
 
 def detect_tag(filename):
+    """Return type and position of ID3v2 tag in filename.
+    Returns (tag_class, offset, length), where tag_class
+    is either Tag22, Tag23, or Tag24, and (offset, length)
+    is the position of the tag in the file.
+    """
     with fileutil.opened(filename, "rb") as file:
         header = file.peek(10)
         if len(header) < 10:
@@ -55,7 +60,8 @@ def detect_tag(filename):
         if header[0:3] != b"ID3":
             raise NoTagError("ID3v2 tag not found")
         if header[3] not in _tag_versions or header[4] != 0:
-            raise TagError("Unknown ID3 version: 2.{0}.{1}".format(*header[3:5]))
+            raise TagError("Unknown ID3 version: 2.{0}.{1}"
+                           .format(*header[3:5]))
         cls = _tag_versions[header[3]]
         offset = file.tell()
         length = Syncsafe.decode(header[6:10]) + 10
@@ -132,14 +138,36 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     def __len__(self):
         return sum(len(self._frames[l]) for l in self._frames)
 
-    def _normalize_key(self, key):
+    def _normalize_key(self, key, unknown_ok=True):
         if Frames.is_frame_class(key):
             return key.__name__
+        if isinstance(key, str):
+            if not _is_frame_id(key):
+                raise IndexError("Invalid frame id " + key)
+            if key not in self.known_frames:
+                if unknown_ok:
+                    warn("Unknown frame id " + key, Warning)
+                else:
+                    raise IndexError("Unknown frame id " + key)
         return key
+
     def __getitem__(self, key):
         return self._frames[self._normalize_key(key)]
+
     def __setitem__(self, key, value):
-        self._frames[self._normalize_key(key)] = value
+        key = self._normalize_key(key, unknown_ok=False)
+        if isinstance(value, self.known_frames[key]):
+            self._frames[key] = [value]
+
+        if self.known_frames[key]._allow_duplicates:
+            if not isinstance(value, collections.Iterable) or isinstance(value, str):
+                raise ValueError("{0} requires a list of frame values".format(key))
+            self._frames[key] = [val if isinstance(val, self.known_frames[key])
+                                 else self.known_frames[key](val) 
+                                 for val in value]
+        else: # not _allow_duplicates
+            self._frames[key] = [self.known_frames[key](value)]
+
     def __delitem__(self, key):
         del self._frames[self._normalize_key(key)]
     

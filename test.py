@@ -83,3 +83,14 @@ def t(filename, tag, out="test.mp3"):
     frames2 = stagger.read(out)
     print([f.frameid for f in frames2])
 
+
+from stagger.id3 import *
+tag = stagger.read_tag("samples/download24.mp3")
+print(tag[TIT2])
+tag[TIT2] = "This is a test"
+print(tag[TIT2])
+
+shutil.copy("samples/download24.mp3", "test.mp3")
+tag.write("test.mp3")
+
+
