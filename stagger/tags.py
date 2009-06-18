@@ -47,6 +47,14 @@ def read_tag(filename):
     with fileutil.opened(filename, "rb") as file:
         return detect_tag(file)[0].read(file)
 
+def delete_tag(filename):
+    with fileutil.opened(filename, "rb+") as file:
+        try:
+            (cls, offset, length) = detect_tag(file)
+            fileutil.replace_chunk(file, offset, length, bytes())
+        except NoTagError:
+            pass
+
 def detect_tag(filename):
     """Return type and position of ID3v2 tag in filename.
     Returns (tag_class, offset, length), where tag_class
