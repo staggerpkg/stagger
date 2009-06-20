@@ -53,6 +53,7 @@ def test(*roots, wait=False, randomize=False, limit=None, catch_errors=False):
             print(tag)
             for frame in tag.values():
                 print("    " + str(frame))
+            
         except stagger.NoTagError:
             pass
         except Exception as e:
@@ -83,14 +84,15 @@ def t(filename, tag, out="test.mp3"):
     frames2 = stagger.read(out)
     print([f.frameid for f in frames2])
 
+def extract_id3(filename):
+    assert filename.endswith(".mp3")
+    (cls, offset, length) = stagger.tags.detect_tag(filename)
+    id3 = os.path.splitext(mp3)[0] + ".id3"
+    with open(filename, "rb") as inp:
+        inp.seek(offset)
+        with open(id3, "wb") as out:
+            out.write(stagger.fileutil.xread(inp, length))
 
-from stagger.id3 import *
-tag = stagger.read_tag("samples/download24.mp3")
-print(tag[TIT2])
-tag[TIT2] = "This is a test"
-print(tag[TIT2])
-
-shutil.copy("samples/download24.mp3", "test.mp3")
-tag.write("test.mp3")
-
-
+for mp3 in sys.argv[1:]:
+    print(mp3)
+    extract_id3(mp3)

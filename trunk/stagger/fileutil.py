@@ -51,6 +51,7 @@ def replace_chunk(filename, offset, length, chunk, in_place=True, max_mem=5):
         while length > 0:
             l = min(BUFSIZE, length)
             buf = src.read(l)
+            assert len(buf) == l
             dst.write(buf)
             length -= l
 
@@ -88,7 +89,7 @@ def replace_chunk(filename, offset, length, chunk, in_place=True, max_mem=5):
                     m[offset:offset + len(chunk)] = chunk
                 finally:
                     m.close()
-            except (ImportError, EnvironmentError, ValueErro):
+            except (ImportError, EnvironmentError, ValueError):
                 # mmap didn't work.  Let's load the tail into a tempfile
                 # and construct the result from there.
                 file.seek(offset + length)
