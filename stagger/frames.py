@@ -38,8 +38,12 @@ class Frame(metaclass=abc.ABCMeta):
             warn("Support for {0} is untested; please verify results".format(frameid), 
                  UntestedFrameWarning)
         for spec in frame._framespec:
-            val, data = spec.read(frame, data)
-            setattr(frame, spec.name, val)
+            try:
+                val, data = spec.read(frame, data)
+                setattr(frame, spec.name, val)
+            except EOFError:
+                if not spec._optional:
+                    raise
         return frame
 
     @classmethod

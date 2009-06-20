@@ -10,9 +10,15 @@ from stagger.errors import *
 
 # The idea for the Spec system comes from Mutagen.
 
+def optionalspec(spec):
+    spec._optional = True
+    return spec
+
 class Spec(metaclass=abc.ABCMeta):
     def __init__(self, name):
         self.name = name
+
+    _optional = False
         
     @abstractmethod
     def read(self, frame, data): pass
@@ -129,7 +135,7 @@ class SimpleStringSpec(Spec):
         return data[:self.length].decode('iso-8859-1'), data[self.length:]
     def write(self, frame, value):
         if value is None:
-            return b"\x00" * self.length
+            return b" " * self.length
         data = value.encode('iso-8859-1')
         if len(data) != self.length:
             raise ValueError("String length mismatch")

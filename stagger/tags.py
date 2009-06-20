@@ -280,7 +280,7 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
                     return Frames.URLFrame._from_data(frameid, data, flags)
                 else:
                     return Frames.UnknownFrame._from_data(frameid, data, flags)
-        except (FrameError, ValueError) as e:
+        except (FrameError, ValueError, EOFError) as e:
             return Frames.ErrorFrame(frameid, data, e)
 
     @abstractmethod

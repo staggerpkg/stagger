@@ -414,16 +414,16 @@ class POPM(Frame):
     "Popularimeter"
     _framespec = (NullTerminatedStringSpec("email"),
                   ByteSpec("rating"),
-                  IntegerSpec("count", 4))
+                  # Windows Vista's explorer does not generate a count
+                  optionalspec(IntegerSpec("count", 4)))
     _allow_duplicates = True
 
 @frameclass
 class RBUF(Frame):
     "Recommended buffer size"
     _framespec = (IntegerSpec("size", 4),
-                  #optional:
-                  ByteSpec("info"),
-                  IntegerSpec("offset", 4))
+                  optionalspec(ByteSpec("info")),
+                  optionalspec(IntegerSpec("offset", 4)))
     _untested = True
     _bozo = True
 
@@ -443,8 +443,7 @@ class LINK(Frame):
     "Linked information"
     _framespec = (SimpleStringSpec("linked_frameid", 4),
                   NullTerminatedStringSpec("url"),
-                  # optional
-                  BinaryDataSpec("data"))
+                  optionalspec(BinaryDataSpec("data")))
     _allow_duplicates = True
     _untested = True
     _bozo = True
