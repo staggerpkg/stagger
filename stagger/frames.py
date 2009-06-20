@@ -17,10 +17,18 @@ class Frame(metaclass=abc.ABCMeta):
     def __init__(self, frameid=None, flags=None, **kwargs):
         self.frameid = frameid if frameid else type(self).__name__
         self.flags = flags if flags else {}
+        assert len(self._framespec) > 0
         for spec in self._framespec:
             val = kwargs.get(spec.name, None)
-            if val != None: val = spec.validate(self, val)
             setattr(self, spec.name, val)
+
+    def __setattr__(self, name, value):
+        # Automatic validation on assignment
+        for spec in self._framespec:
+            if name == spec.name:
+                if value is not None:
+                    value = spec.validate(self, value)
+        super().__setattr__(name, value)
 
     @classmethod
     def _from_data(cls, frameid, data, flags=None):
@@ -93,7 +101,7 @@ class Frame(metaclass=abc.ABCMeta):
                     self.encoding = None
             raise ValueError("Could not encode strings")
         
-        if isinstance(self._framespec[0], EncodingSpec) and self.encoding == None:
+        if isinstance(self._framespec[0], EncodingSpec) and self.encoding is None:
             return try_preferred_encodings()
         else:
             try:
@@ -158,6 +166,8 @@ class TextFrame(Frame):
 
     def __init__(self, *values, frameid=None, flags=None, **kwargs):
         def extract_strs(values):
+            if values is None:
+                return
             if isinstance(values, str):
                 yield values
             elif isinstance(values, collections.Iterable):

@@ -11,8 +11,8 @@ from contextlib import contextmanager
 
 from stagger.errors import *
 from stagger.conversion import *
+
 import stagger.frames as Frames
-import stagger.id3 as id3
 import stagger.fileutil as fileutil
 
 _FRAME23_FORMAT_COMPRESSED = 0x0080
@@ -77,6 +77,47 @@ def detect_tag(filename):
             length += 10
         return (cls, offset, length)
 
+def frameclass(cls):
+    """Register cls as a class representing an ID3 frame.
+
+    Sets cls.frameid and cls._version if not present, and registers the
+    new frame in Tag's known_frames dictionary.
+
+    To be used as a decorator on the class definition:
+
+    @frameclass
+    class UFID(Frame):
+        _framespec = (NullTerminatedStringSpec("owner"), BinaryDataSpec("data"))
+    """
+    assert issubclass(cls, Frames.Frame)
+
+    # Register v2.2 versions of v2.3/v2.4 frames if encoded by inheritance.
+    if len(cls.__name__) == 3:
+        base = cls.__bases__[0]
+        if issubclass(base, Frames.Frame) and base._in_version(3, 4):
+            assert not hasattr(base, "_v2_frame")
+            base._v2_frame = cls
+            # Override frameid from base with v2.2 name
+            if base.frameid == cls.frameid:
+                cls.frameid = cls.__name__
+
+    # Add frameid.
+    if not hasattr(cls, "frameid"):
+        cls.frameid = cls.__name__
+    assert Tag._is_frame_id(cls.frameid.encode("ASCII"))
+
+    # Supply _version attribute if missing.
+    if len(cls.frameid) == 3:
+        cls._version = 2
+    if len(cls.frameid) == 4 and not cls._version:
+        cls._version = (3, 4)
+
+    # Register cls as a known frame.
+    assert cls.frameid not in Tag.known_frames
+    Tag.known_frames[cls.frameid] = cls
+    
+    return cls
+
 class FrameOrder:
     """Order frames based on their position in a predefined list of patterns.
 
@@ -121,18 +162,19 @@ class FrameOrder:
 
         return self.unknown_key
 
+    def __repr__(self):
+        order = []
+        order.extend((repr(pair[0]), pair[1]) for pair in self.re_keys)
+        order.extend((cls.__name__, self.frame_keys[cls]) 
+                     for cls in self.frame_keys)
+        order.sort(key=lambda pair: pair[1])
+        return "<FrameOrder: {0}>".format(", ".join(pair[0] for pair in order))
+        
 
 class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
-    known_frames = { cls.__name__: cls for cls in id3.__dict__.values()
-                     if Frames.is_frame_class(cls) }
+    known_frames = { }
 
-    frame_order = FrameOrder(id3.TIT2, id3.TPE1, id3.TALB, id3.TRCK, id3.TCOM, 
-                             id3.TPOS,
-                             id3.TDRC, id3.TYER, id3.TRDA, id3.TDAT, id3.TIME,
-                             "T.*", id3.COMM, "W*", id3.TXXX, id3.WXXX,
-                             id3.UFID, id3.PCNT, id3.POPM,
-                             id3.APIC, id3.PIC, id3.GEOB, id3.PRIV,
-                             ".*")
+    frame_order = None        # Initialized by stagger.id3
 
     def __init__(self):
         self.flags = set()
@@ -184,11 +226,13 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
             for frame in self._frames[frameid]:
                 yield frame
 
-    def __str__(self):
-        return "ID3v2.{0}(flags={{{1}}} size={2})".format(
+    def __repr__(self):
+        return "<{0}: ID3v2.{1} tag{2} with {3} frames>".format(
+            type(self).__name__,
             self.version,
-            " ".join(self.flags),
-            self.size)
+            ("({0})".format(", ".join(self.flags)) 
+             if len(self.flags) > 0 else ""),
+            len(self._frames))
     
     # Reading tags
 
@@ -238,7 +282,13 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
 
     def write(self, filename):
         with fileutil.opened(filename, "rb+") as file:
-            (offset, length) = detect_tag(file)[1:3]
+            try:
+                (offset, length) = detect_tag(file)[1:3]
+            except NoTagError:
+                (offset, length) = (0, 0)
+            if offset > 0:
+                delete_tag(file)
+                (offset, length) = (0, 0)
             tag_data = self.encode(size_hint=length)
             fileutil.replace_chunk(file, offset, length, tag_data)
 
@@ -246,13 +296,13 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     def encode(self, size_hint=None):
         pass
 
-    padding_default = 1024
-    padding_max = 10240
+    padding_default = 128
+    padding_max = 1024
 
     def _get_size_with_padding(self, size_desired, size_actual):
         size = size_actual
         if (size_desired != None and size < size_desired
-            and (self.padding_max == None or 
+            and (self.padding_max is None or 
                  size_desired - size_actual <= self.padding_max)):
             size = size_desired
         elif self.padding_default:
