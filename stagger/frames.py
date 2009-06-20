@@ -24,10 +24,11 @@ class Frame(metaclass=abc.ABCMeta):
 
     def __setattr__(self, name, value):
         # Automatic validation on assignment
-        for spec in self._framespec:
-            if name == spec.name:
-                if value is not None:
+        if value is not None:
+            for spec in self._framespec:
+                if name == spec.name:
                     value = spec.validate(self, value)
+                    break
         super().__setattr__(name, value)
 
     @classmethod
@@ -176,7 +177,7 @@ class TextFrame(Frame):
                         yield v
             else:
                 raise ValueError("Invalid text frame value")
-        super().__init__(frameid=frameid, flags=flags, kwargs=kwargs)
+        super().__init__(frameid=frameid, flags=flags, **kwargs)
         self.text = list(extract_strs(values))
 
     def _str_fields(self):

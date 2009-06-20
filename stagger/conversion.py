@@ -49,7 +49,7 @@ class UnsyncReader:
             pass
 
     def read(self, n):
-        data = bytearray([b for i, b in zip(range(n), gen)])
+        data = bytes(b for i, b in zip(range(n), self.gen))
         if len(data) < n:
             raise EOFError
         return data
@@ -64,7 +64,7 @@ class Syncsafe:
         value = 0
         for b in data:
             if b > 127:  # iTunes bug
-                raise TagError("Invalid syncsafe integer")
+                raise ValueError("Invalid syncsafe integer")
             value <<= 7
             value += b
         return value
@@ -76,7 +76,8 @@ class Syncsafe:
         When width > 0, then len(result) == width
         When width < 0, then len(result) >= abs(width)
         """
-        assert i >= 0
+        if i < 0:
+            raise ValueError("value is negative")
         assert width != 0
         data = bytearray()
         while i:
@@ -114,5 +115,4 @@ class Int8:
             raise ValueError("Integer too large")
         if len(data) < abs(width):
             data.extend([0] * (abs(width) - len(data)))
-        data.reverse()
-        return data
+        return bytes(data[::-1])
