@@ -5,174 +5,222 @@
 
 import imghdr
 
-import stagger.frames as Frames
+import stagger.tags as tags
+from stagger.frames import *
 from stagger.specs import *
-
+from stagger.tags import frameclass
 
 
 # ID3v2.4
 
 # 4.2.1. Identification frames
-class UFID(Frames.Frame):
+@frameclass
+class UFID(Frame):
     "Unique file identifier"
     _framespec = (NullTerminatedStringSpec("owner"), BinaryDataSpec("data"))
     _allow_duplicates = True
 
-class TIT1(Frames.TextFrame): 
+@frameclass
+class TIT1(TextFrame): 
     "Content group description"
 
-class TIT2(Frames.TextFrame): 
+@frameclass
+class TIT2(TextFrame): 
     "Title/songname/content description"
 
-class TIT3(Frames.TextFrame): 
+@frameclass
+class TIT3(TextFrame): 
     "Subtitle/Description refinement"
 
-class TALB(Frames.TextFrame): 
+@frameclass
+class TALB(TextFrame): 
     "Album/Movie/Show title"
 
-class TOAL(Frames.TextFrame): 
+@frameclass
+class TOAL(TextFrame): 
     "Original album/movie/show title"
 
-class TRCK(Frames.TextFrame): 
+@frameclass
+class TRCK(TextFrame): 
     "Track number/Position in set"
 # #/#
 
-class TPOS(Frames.TextFrame): 
+@frameclass
+class TPOS(TextFrame): 
     "Part of a set"
 # #/#
 
-class TSST(Frames.TextFrame):
+@frameclass
+class TSST(TextFrame):
     "Set subtitle"
     _version = 4
 
-class TSRC(Frames.TextFrame): 
+@frameclass
+class TSRC(TextFrame): 
     "ISRC (international standard recording code)"
 
 
 # 4.2.2. Involved persons frames
-class TPE1(Frames.TextFrame): 
+@frameclass
+class TPE1(TextFrame): 
     "Lead performer(s)/Soloist(s)"
 
-class TPE2(Frames.TextFrame): 
+@frameclass
+class TPE2(TextFrame): 
     "Band/orchestra/accompaniment"
 
-class TPE3(Frames.TextFrame): 
+@frameclass
+class TPE3(TextFrame): 
     "Conductor/performer refinement"
 
-class TPE4(Frames.TextFrame): 
+@frameclass
+class TPE4(TextFrame): 
     "Interpreted, remixed, or otherwise modified by"
 
-class TOPE(Frames.TextFrame): 
+@frameclass
+class TOPE(TextFrame): 
     "Original artist(s)/performer(s)"
 
-class TEXT(Frames.TextFrame): "Lyricist/Text writer"
-class TOLY(Frames.TextFrame): "Original lyricist(s)/text writer(s)"
-class TCOM(Frames.TextFrame): "Composer"
+@frameclass
+class TEXT(TextFrame): "Lyricist/Text writer"
+@frameclass
+class TOLY(TextFrame): "Original lyricist(s)/text writer(s)"
+@frameclass
+class TCOM(TextFrame): "Composer"
 
-class TMCL(Frames.CreditsFrame):
+@frameclass
+class TMCL(CreditsFrame):
     "Musician credits list"
     _version = 4
 
-class TIPL(Frames.CreditsFrame):
+@frameclass
+class TIPL(CreditsFrame):
     "Involved people list"
     _version = 4
 
-class TENC(Frames.TextFrame): "Encoded by"
+@frameclass
+class TENC(TextFrame): "Encoded by"
 
 
 
 # 4.2.3. Derived and subjective properties frames
 
-class TBPM(Frames.TextFrame): "BPM (beats per minute)"
+@frameclass
+class TBPM(TextFrame): "BPM (beats per minute)"
 # integer in string format
 
-class TLEN(Frames.TextFrame): "Length"
+@frameclass
+class TLEN(TextFrame): "Length"
 # milliseconds in string format
 
-class TKEY(Frames.TextFrame): "Initial key"
+@frameclass
+class TKEY(TextFrame): "Initial key"
 # /^([CDEFGAB][b#]?[m]?|o)$/
 
-class TLAN(Frames.TextFrame): "Language(s)"
+@frameclass
+class TLAN(TextFrame): "Language(s)"
 # /^...$/  ISO 639-2
 
-class TCON(Frames.TextFrame): "Content type"
+@frameclass
+class TCON(TextFrame): "Content type"
 # integer  - ID3v1
 # RX - Remix
 # CR - Cover
 # Freeform text
 # id3v2.3: (number), 
 
-class TFLT(Frames.TextFrame): "File type"
-class TMED(Frames.TextFrame): "Media type"
-class TMOO(Frames.TextFrame):
+@frameclass
+class TFLT(TextFrame): "File type"
+@frameclass
+class TMED(TextFrame): "Media type"
+@frameclass
+class TMOO(TextFrame):
     "Mood"
     _version = 4
 
 
 # 4.2.4. Rights and license frames
 
-class TCOP(Frames.TextFrame): "Copyright message"
-class TPRO(Frames.TextFrame):
+@frameclass
+class TCOP(TextFrame): "Copyright message"
+@frameclass
+class TPRO(TextFrame):
     "Produced notice"
     _version = 4
     
-class TPUB(Frames.TextFrame): "Publisher"
-class TOWN(Frames.TextFrame): "File owner/licensee"
-class TRSN(Frames.TextFrame): "Internet radio station name"
-class TRSO(Frames.TextFrame): "Internet radio station owner"
+@frameclass
+class TPUB(TextFrame): "Publisher"
+@frameclass
+class TOWN(TextFrame): "File owner/licensee"
+@frameclass
+class TRSN(TextFrame): "Internet radio station name"
+@frameclass
+class TRSO(TextFrame): "Internet radio station owner"
 
 
 
 # 4.2.5. Other text frames
 
-class TOFN(Frames.TextFrame): "Original filename"
-class TDLY(Frames.TextFrame): "Playlist delay"
+@frameclass
+class TOFN(TextFrame): "Original filename"
+@frameclass
+class TDLY(TextFrame): "Playlist delay"
 # milliseconds
 
-class TDEN(Frames.TextFrame):
+@frameclass
+class TDEN(TextFrame):
     # timestamp
     "Encoding time"
     _version = 4
 
-class TDOR(Frames.TextFrame):
+@frameclass
+class TDOR(TextFrame):
     "Original release time"
     # timestamp
     _version = 4
 
-class TDRC(Frames.TextFrame):
+@frameclass
+class TDRC(TextFrame):
     "Recording time"
     # timestamp
     _version = 4
 
-class TDRL(Frames.TextFrame):
+@frameclass
+class TDRL(TextFrame):
     "Release time"
     # timestamp
     _version = 4
 
-class TDTG(Frames.TextFrame):
+@frameclass
+class TDTG(TextFrame):
     "Tagging time"
     # timestamp
     _version = 4
 
-class TSSE(Frames.TextFrame): 
+@frameclass
+class TSSE(TextFrame): 
     "Software/Hardware and settings used for encoding"
 
-class TSOA(Frames.TextFrame):
+@frameclass
+class TSOA(TextFrame):
     "Album sort order"
     _version = 4
 
-class TSOP(Frames.TextFrame):
+@frameclass
+class TSOP(TextFrame):
     "Performer sort order"
     _version = 4
 
-class TSOT(Frames.TextFrame):
+@frameclass
+class TSOT(TextFrame):
     "Title sort order"
     _version = 4
 
 
 # 4.2.6. User defined information frame
 
-class TXXX(Frames.Frame):
+@frameclass
+class TXXX(Frame):
     "User defined text information frame"
     _framespec = (EncodingSpec("encoding"),
                   EncodedStringSpec("description"),
@@ -182,33 +230,42 @@ class TXXX(Frames.Frame):
 
 # 4.3. URL link frames
 
-class WCOM(Frames.URLFrame): 
+@frameclass
+class WCOM(URLFrame): 
     "Commercial information"
     _allow_duplicates = True
 
-class WCOP(Frames.URLFrame): 
+@frameclass
+class WCOP(URLFrame): 
     "Copyright/Legal information"
 
-class WOAF(Frames.URLFrame): 
+@frameclass
+class WOAF(URLFrame): 
     "Official audio file webpage"
 
-class WOAR(Frames.URLFrame): 
+@frameclass
+class WOAR(URLFrame): 
     "Official artist/performer webpage"
     _allow_duplicates = True
 
-class WOAS(Frames.URLFrame): 
+@frameclass
+class WOAS(URLFrame): 
     "Official audio source webpage"
 
-class WORS(Frames.URLFrame): 
+@frameclass
+class WORS(URLFrame): 
     "Official Internet radio station homepage"
 
-class WPAY(Frames.URLFrame): 
+@frameclass
+class WPAY(URLFrame): 
     "Payment"
 
-class WPUB(Frames.URLFrame): 
+@frameclass
+class WPUB(URLFrame): 
     "Publishers official webpage"
 
-class WXXX(Frames.Frame):
+@frameclass
+class WXXX(Frame):
     "User defined URL link frame"
     _framespec = (EncodingSpec("encoding"),
                   EncodedStringSpec("description"),
@@ -217,18 +274,21 @@ class WXXX(Frames.Frame):
 
 
 # 4.4.-4.13  Junk frames
-class MCDI(Frames.Frame):
+@frameclass
+class MCDI(Frame):
     "Music CD identifier"
     _framespec = (BinaryDataSpec("cd_toc"),)
 
-class ETCO(Frames.Frame):
+@frameclass
+class ETCO(Frame):
     "Event timing codes"
     _framespec = (ByteSpec("format"),
                   MultiSpec("events", ByteSpec("type"), IntegerSpec("timestamp", 4)))
     _untested = True
     _bozo = True
 
-class MLLT(Frames.Frame):
+@frameclass
+class MLLT(Frame):
     "MPEG location lookup table"
     _framespec = (IntegerSpec("frames", 2), IntegerSpec("bytes", 3),
                   IntegerSpec("milliseconds", 3),
@@ -237,20 +297,23 @@ class MLLT(Frames.Frame):
     _untested = True
     _bozo = True
 
-class SYTC(Frames.Frame):
+@frameclass
+class SYTC(Frame):
     "Synchronised tempo codes"
     _framespec = (ByteSpec("format"), BinaryDataSpec("data"))
     _untested = True
     _bozo = True
 
-class USLT(Frames.Frame):
+@frameclass
+class USLT(Frame):
     "Unsynchronised lyric/text transcription"
     _framespec = (EncodingSpec("encoding"), LanguageSpec("lang"),
                   EncodedStringSpec("desc"), EncodedFullTextSpec("text"))
     _allow_duplicates = True
     _untested = True
     
-class SYLT(Frames.Frame):
+@frameclass
+class SYLT(Frame):
     "Synchronised lyric/text"
     _framespec = (EncodingSpec("encoding"), LanguageSpec("lang"),
                   ByteSpec("format"), ByteSpec("type"),
@@ -260,13 +323,15 @@ class SYLT(Frames.Frame):
     _untested = True
     _bozo = True
 
-class COMM(Frames.Frame):
+@frameclass
+class COMM(Frame):
     "Comments"
     _framespec = (EncodingSpec("encoding"), LanguageSpec("lang"),
                   EncodedStringSpec("desc"), EncodedFullTextSpec("text"))
     _allow_duplicates = True
 
-class RVA2(Frames.Frame):
+@frameclass
+class RVA2(Frame):
     "Relative volume adjustment (2)"
     _framespec = (NullTerminatedStringSpec("desc"),
                   MultiSpec("adjustment",
@@ -276,7 +341,8 @@ class RVA2(Frames.Frame):
     _allow_duplicates = True
     _untested = True
 
-class EQU2(Frames.Frame):
+@frameclass
+class EQU2(Frame):
     "Equalisation (2)"
     _framespec = (ByteSpec("method"), NullTerminatedStringSpec("desc"),
                   MultiSpec("adjustments",
@@ -286,7 +352,8 @@ class EQU2(Frames.Frame):
     _untested = True
     _bozo = True
 
-class RVRB(Frames.Frame):
+@frameclass
+class RVRB(Frame):
     "Reverb"
     _framespec = (IntegerSpec("left", 2),
                   IntegerSpec("right", 2),
@@ -297,7 +364,8 @@ class RVRB(Frames.Frame):
     _untested = True
     _bozo = True
 
-class APIC(Frames.Frame):
+@frameclass
+class APIC(Frame):
     "Attached picture"
     _framespec = (EncodingSpec("encoding"),
                   NullTerminatedStringSpec("mime"),
@@ -326,7 +394,8 @@ class APIC(Frames.Frame):
                                                           img)
     
 
-class GEOB(Frames.Frame):
+@frameclass
+class GEOB(Frame):
     "General encapsulated object"
     _framespec = (EncodingSpec("encoding"),
                   NullTerminatedStringSpec("mime"),
@@ -335,18 +404,21 @@ class GEOB(Frames.Frame):
                   BinaryDataSpec("data"))
     _allow_duplicates = True
 
-class PCNT(Frames.Frame):
+@frameclass
+class PCNT(Frame):
     "Play counter"
     _framespec = (IntegerSpec("count", 4),)
 
-class POPM(Frames.Frame):
+@frameclass
+class POPM(Frame):
     "Popularimeter"
     _framespec = (NullTerminatedStringSpec("email"),
                   ByteSpec("rating"),
                   IntegerSpec("count", 4))
     _allow_duplicates = True
 
-class RBUF(Frames.Frame):
+@frameclass
+class RBUF(Frame):
     "Recommended buffer size"
     _framespec = (IntegerSpec("size", 4),
                   #optional:
@@ -355,7 +427,8 @@ class RBUF(Frames.Frame):
     _untested = True
     _bozo = True
 
-class AENC(Frames.Frame):
+@frameclass
+class AENC(Frame):
     "Audio encryption"
     _framespec = (NullTerminatedStringSpec("owner"),
                   IntegerSpec("preview_start", 2),
@@ -365,7 +438,8 @@ class AENC(Frames.Frame):
     _untested = True
     _bozo = True
 
-class LINK(Frames.Frame):
+@frameclass
+class LINK(Frame):
     "Linked information"
     _framespec = (SimpleStringSpec("linked_frameid", 4),
                   NullTerminatedStringSpec("url"),
@@ -375,14 +449,16 @@ class LINK(Frames.Frame):
     _untested = True
     _bozo = True
 
-class POSS(Frames.Frame):
+@frameclass
+class POSS(Frame):
     "Position synchronisation frame"
     _framespec = (ByteSpec("format"),
                   IntegerSpec("position", 4))
     _untested = True
     _bozo = True
 
-class USER(Frames.Frame):
+@frameclass
+class USER(Frame):
     "Terms of use"
     # TODO: emusic.com forgets the language field
     _framespec = (EncodingSpec("encoding"),
@@ -390,7 +466,8 @@ class USER(Frames.Frame):
                   EncodedStringSpec("text"))
     _allow_duplicates = True
 
-class OWNE(Frames.Frame):
+@frameclass
+class OWNE(Frame):
     "Ownership frame"
     _framespec = (EncodingSpec("encoding"),
                   NullTerminatedStringSpec("price"),
@@ -399,7 +476,8 @@ class OWNE(Frames.Frame):
     _untested = True
     _bozo = True
 
-class COMR(Frames.Frame):
+@frameclass
+class COMR(Frame):
     "Commercial frame"
     _framespec = (EncodingSpec("encoding"),
                   NullTerminatedStringSpec("price"),
@@ -414,7 +492,8 @@ class COMR(Frames.Frame):
     _untested = True
     _bozo = True
 
-class ENCR(Frames.Frame):
+@frameclass
+class ENCR(Frame):
     "Encryption method registration"
     _framespec = (NullTerminatedStringSpec("owner"),
                   ByteSpec("symbol"),
@@ -424,7 +503,8 @@ class ENCR(Frames.Frame):
     _bozo = True
 
 
-class GRID(Frames.Frame):
+@frameclass
+class GRID(Frame):
     "Group identification registration"
     _framespec = (NullTerminatedStringSpec("owner"),
                   ByteSpec("symbol"),
@@ -433,13 +513,15 @@ class GRID(Frames.Frame):
     _untested = True
     _bozo = True
 
-class PRIV(Frames.Frame):
+@frameclass
+class PRIV(Frame):
     "Private frame"
     _framespec = (NullTerminatedStringSpec("owner"),
                   BinaryDataSpec("data"))
     _allow_duplicates = True
 
-class SIGN(Frames.Frame):
+@frameclass
+class SIGN(Frame):
     "Signature frame"
     _framespec = (ByteSpec("group"),
                   BinaryDataSpec("data"))
@@ -448,14 +530,16 @@ class SIGN(Frames.Frame):
     _bozo = True
     _version = 4
 
-class SEEK(Frames.Frame):
+@frameclass
+class SEEK(Frame):
     "Seek frame"
     _framespec = (IntegerSpec("offset", 4), )
     _untested = True
     _bozo = True
     _version = 4
 
-class ASPI(Frames.Frame):
+@frameclass
+class ASPI(Frame):
     "Audio seek point index"
     _framespec = (IntegerSpec("S", 4),
                   IntegerSpec("L", 4),
@@ -469,47 +553,54 @@ class ASPI(Frames.Frame):
 
 # ID3v2.3
 
-class TYER(Frames.TextFrame):
+@frameclass
+class TYER(TextFrame):
     """Year
     A numerical string with the year of the recording.
     Replaced by TDRC in id3v2.4
     """
     _version = 3
     
-class TDAT(Frames.TextFrame):
+@frameclass
+class TDAT(TextFrame):
     """Date
     A numerical string in DDMM format containing the date for the recording.
     Replaced by TDRC in id3v2.4
     """
     _version = 3
 
-class TIME(Frames.TextFrame):
+@frameclass
+class TIME(TextFrame):
     """Time
     A numerical string in HHMM format containing the time for the recording.
     Replaced by TDRC in id3v2.4
     """
     _version = 3
 
-class TORY(Frames.TextFrame):
+@frameclass
+class TORY(TextFrame):
     """Original release year
     Replaced by TDOR in id3v2.4
     """
     _version = 3
 
-class TRDA(Frames.TextFrame):
+@frameclass
+class TRDA(TextFrame):
     """Recording dates
     Replaced by TDRC in id3v2.4
     """
     _version = 3
 
-class TSIZ(Frames.TextFrame):
+@frameclass
+class TSIZ(TextFrame):
     """Size
     Size of the audio file in bytes, excluding the ID3v2 tag.
     Removed in id3v2.4
     """
     _version = 3
 
-class IPLS(Frames.CreditsFrame):
+@frameclass
+class IPLS(CreditsFrame):
     """Involved people list
     Replaced by TMCL and TIPL in id3v2.4
     """
@@ -518,7 +609,8 @@ class IPLS(Frames.CreditsFrame):
     _bozo = True
     _version = 3
 
-class EQUA(Frames.Frame):
+@frameclass
+class EQUA(Frame):
     """Equalisation
     Replaced by EQU2 in id3v2.4
     """
@@ -527,7 +619,8 @@ class EQUA(Frames.Frame):
     _bozo = True
     _version = 3
 
-class RVAD(Frames.Frame):
+@frameclass
+class RVAD(Frame):
     """Relative volume adjustment
     Replaced by RVA2 in id3v2.4
     """
@@ -538,70 +631,126 @@ class RVAD(Frames.Frame):
 
 # ID3v2.2
 
+@frameclass
 class UFI(UFID): pass
+@frameclass
 class TT1(TIT1): pass
+@frameclass
 class TT2(TIT2): pass
+@frameclass
 class TT3(TIT3): pass
+@frameclass
 class TP1(TPE1): pass
+@frameclass
 class TP2(TPE2): pass
+@frameclass
 class TP3(TPE3): pass
+@frameclass
 class TP4(TPE4): pass
+@frameclass
 class TCM(TCOM): pass
+@frameclass
 class TXT(TEXT): pass
+@frameclass
 class TLA(TLAN): pass
+@frameclass
 class TCO(TCON): pass
+@frameclass
 class TAL(TALB): pass
+@frameclass
 class TPA(TPOS): pass
+@frameclass
 class TRK(TRCK): pass
+@frameclass
 class TRC(TSRC): pass
+@frameclass
 class TYE(TYER): pass
+@frameclass
 class TDA(TDAT): pass
+@frameclass
 class TIM(TIME): pass
+@frameclass
 class TRD(TRDA): pass
+@frameclass
 class TMT(TMED): pass
+@frameclass
 class TFT(TFLT): pass
+@frameclass
 class TBP(TBPM): pass
+@frameclass
 class TCR(TCOP): pass
+@frameclass
 class TPB(TPUB): pass
+@frameclass
 class TEN(TENC): pass
+@frameclass
 class TSS(TSSE): pass
+@frameclass
 class TOF(TOFN): pass
+@frameclass
 class TLE(TLEN): pass
+@frameclass
 class TSI(TSIZ): pass
+@frameclass
 class TDY(TDLY): pass
+@frameclass
 class TKE(TKEY): pass
+@frameclass
 class TOT(TOAL): pass
+@frameclass
 class TOA(TOPE): pass
+@frameclass
 class TOL(TOLY): pass
+@frameclass
 class TOR(TORY): pass
 
+@frameclass
 class TXX(TXXX): pass
 
+@frameclass
 class WAF(WOAF): pass
+@frameclass
 class WAR(WOAR): pass
+@frameclass
 class WAS(WOAS): pass
+@frameclass
 class WCM(WCOM): pass
+@frameclass
 class WCP(WCOP): pass
+@frameclass
 class WPB(WPUB): pass
 
+@frameclass
 class WXX(WXXX): pass
 
+@frameclass
 class IPL(IPLS): pass
 
+@frameclass
 class MCI(MCDI): pass
+@frameclass
 class ETC(ETCO): pass
+@frameclass
 class MLL(MLLT): pass
+@frameclass
 class STC(SYTC): pass
+@frameclass
 class ULT(USLT): pass
+@frameclass
 class SLT(SYLT): pass
 
+@frameclass
 class COM(COMM): pass
 
+@frameclass
 class RVA(RVAD): pass
+@frameclass
 class EQU(EQUA): pass
+@frameclass
 class REV(RVRB): pass
 
-class PIC(Frames.Frame):
+@frameclass
+class PIC(Frame):
     "Attached picture"
     _framespec = (EncodingSpec("encoding"),
                   SimpleStringSpec("format", 3),
@@ -621,7 +770,7 @@ class PIC(Frames.Frame):
             mime = "image/jpeg"
         else:
             mime = imghdr.what(io.StringIO(self.data))
-            if mime == None:
+            if mime is None:
                 raise ValueError("Unknown image format")
             mime = "image/" + mime.lower()
         return APIC(mime=mime, type=self.type, desc=self.desc, data=self.data)
@@ -636,12 +785,17 @@ class PIC(Frames.Frame):
                                                 img)
 
 
+@frameclass
 class GEO(GEOB): pass
+@frameclass
 class CNT(PCNT): pass
+@frameclass
 class POP(POPM): pass
 
+@frameclass
 class BUF(RBUF): pass
-class CRM(Frames.Frame):
+@frameclass
+class CRM(Frame):
     "Encrypted meta frame"
     _framespec = (NullTerminatedStringSpec("owner"),
                   NullTerminatedStringSpec("content"),
@@ -650,11 +804,13 @@ class CRM(Frames.Frame):
     _untested = True
     _version = 2
 
+@frameclass
 class CRA(AENC): pass
 
-class LNK(Frames.Frame):
+@frameclass
+class LNK(Frame):
     "Linked information"
-    _framespec = (SimpleStringSpec("frameid", 3),
+    _framespec = (SimpleStringSpec("linked_frame", 3),
                   NullTerminatedStringSpec("url"),
                   BinaryDataSpec("data"))
     _bozo = True
@@ -662,45 +818,58 @@ class LNK(Frames.Frame):
     _version = 2
 
 # Nonstandard frames
-class TCMP(Frames.TextFrame): 
+@frameclass
+class TCMP(TextFrame): 
     "iTunes: Part of a compilation"
     _nonstandard = True
 
+@frameclass
 class TCP(TCMP): pass
 
-class TDES(Frames.TextFrame): 
+@frameclass
+class TDES(TextFrame): 
     "iTunes: Podcast description"
     _nonstandard = True
+@frameclass
 class TDS(TDES): pass
 
-class TGID(Frames.TextFrame): 
+@frameclass
+class TGID(TextFrame): 
     "iTunes: Podcast identifier"
     _nonstandard = True
+@frameclass
 class TID(TGID): pass
 
-class TDRL(Frames.TextFrame): 
-    "iTunes: Podcast release date"
+@frameclass
+class TDR(TDRL):
+    "Release date (iTunes extension)"
     _nonstandard = True
-class TDR(TGID): pass
 
-class WFED(Frames.URLFrame): 
+@frameclass
+class WFED(URLFrame): 
     "iTunes: Podcast feed URL"
     _nonstandard = True
+@frameclass
 class WFD(WFED): pass
 
-class TCAT(Frames.TextFrame): 
+@frameclass
+class TCAT(TextFrame): 
     "iTunes: Podcast category"
     _nonstandard = True
+@frameclass
 class TCT(TCAT): pass
 
-class TKWD(Frames.TextFrame): 
+@frameclass
+class TKWD(TextFrame): 
     """iTunes: Podcast keywords
     Comma-separated list of keywords.
     """
     _nonstandard = True
+@frameclass
 class TKW(TKWD): pass
 
-class PCST(Frames.Frame):
+@frameclass
+class PCST(Frame):
     """iTunes: Podcast flag.
 
     If this frame is present, iTunes considers the file to be a podcast.
@@ -708,26 +877,8 @@ class PCST(Frames.Frame):
     """
     _framespec = (IntegerSpec("value", 4),)
     _nonstandard = True
+@frameclass
 class PCS(PCST): pass
-
-
-def _register_frames(module=None):
-    """Supply missing version fields and register v2.2 names 
-    of v2.3 & v2.4 frames based on class inheritance.
-    """
-    for obj in globals().values():
-        if Frames.is_frame_class(obj):
-            if len(obj.__name__) == 3:
-                obj._version = 2
-            if len(obj.__name__) == 4 and not obj._version:
-                obj._version = (3, 4)
-            if obj._in_version(2):
-                base = obj.__bases__[0]
-                if issubclass(base, Frames.Frame) and base._in_version(3, 4):
-                    assert not hasattr(base, "_v2_frame")
-                    base._v2_frame = obj
-
-_register_frames()
 
 
 # Attached picture (APIC & PIC) types
@@ -765,7 +916,7 @@ genres = (
     "Folklore", "Ballad", "Power Ballad", "Rhythmic Soul", "Freestyle",
     "Duet", "Punk Rock", "Drum Solo", "A capella", "Euro-House",
     "Dance Hall",
-    # 126-147: Even more esoteric Winamp extensions
+    # 126-147: Even more esoteric Winamp extensions ("Polsk Punk", indeed)
     "Goa", "Drum & Bass", "Club House", "Hardcore", "Terror", "Indie",
     "BritPop", "Negerpunk", "Polsk Punk", "Beat", "Christian Gangsta Rap",
     "Heavy Metal", "Black Metal", "Crossover", "Contemporary Christian",
@@ -774,4 +925,11 @@ genres = (
 
 
 __all__ = [ obj.__name__ for obj in globals().values() 
-            if Frames.is_frame_class(obj)]
+            if is_frame_class(obj)]
+
+tags.Tag.frame_order = tags.FrameOrder(TIT2, TPE1, TALB, TRCK, TPOS, TCOM,
+                                       TDRC, TYER, TRDA, TDAT, TIME,
+                                       "T.*", COMM, "W*", TXXX, WXXX,
+                                       UFID, PCNT, POPM,
+                                       APIC, PIC, GEOB, PRIV,
+                                       ".*")
