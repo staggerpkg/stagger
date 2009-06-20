@@ -47,6 +47,9 @@ def read_tag(filename):
     with fileutil.opened(filename, "rb") as file:
         return detect_tag(file)[0].read(file)
 
+def decode_tag(data):
+    return read_tag(io.BytesIO(data))
+
 def delete_tag(filename):
     with fileutil.opened(filename, "rb+") as file:
         try:
@@ -193,16 +196,24 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
             return key.__name__
         if isinstance(key, str):
             if not _is_frame_id(key):
-                raise IndexError("Invalid frame id " + key)
+                raise KeyError("Invalid frame id " + key)
             if key not in self.known_frames:
                 if unknown_ok:
                     warn("Unknown frame id " + key, Warning)
                 else:
-                    raise IndexError("Unknown frame id " + key)
+                    raise KeyError("Unknown frame id " + key)
         return key
 
     def __getitem__(self, key):
-        return self._frames[self._normalize_key(key)]
+        key = self._normalize_key(key)
+        if len(self._frames[key]) == 0:
+            raise KeyError("Key not found: " + repr(key))
+        if len(self._frames[key]) > 1:
+            return self._frames[key]
+        if key not in self.known_frames or self.known_frames[key]._allow_duplicates:
+            return self._frames[key]
+        else:
+            return self._frames[key][0]
 
     def __setitem__(self, key, value):
         key = self._normalize_key(key, unknown_ok=False)
@@ -235,10 +246,10 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
             len(self._frames))
     
     # Reading tags
-
     @classmethod
-    def read(cls, file):
-        with fileutil.opened(file, "rb"):
+    def read(cls, filename):
+        """Read a tag from a file."""
+        with fileutil.opened(filename, "rb") as file:
             tag = cls()
             tag._read_header(file)
             for (frameid, bflags, data) in tag._read_frames(file):
@@ -248,6 +259,10 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
                 if file.tell() > tag.offset + tag.size:
                     break
             return tag
+
+    @classmethod
+    def decode(cls, data):
+        return cls.read(io.BytesIO(data))
 
     def _frame_from_data(self, frameid, bflags, data):
         try:
