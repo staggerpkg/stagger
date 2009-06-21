@@ -5,6 +5,7 @@
 import abc
 import collections
 from abc import abstractmethod
+from warnings import warn
 
 from stagger.errors import *
 from stagger.specs import *
@@ -16,7 +17,7 @@ class Frame(metaclass=abc.ABCMeta):
     
     def __init__(self, frameid=None, flags=None, **kwargs):
         self.frameid = frameid if frameid else type(self).__name__
-        self.flags = flags if flags else {}
+        self.flags = flags if flags else set()
         assert len(self._framespec) > 0
         for spec in self._framespec:
             val = kwargs.get(spec.name, None)
@@ -30,6 +31,15 @@ class Frame(metaclass=abc.ABCMeta):
                     value = spec.validate(self, value)
                     break
         super().__setattr__(name, value)
+
+    def __eq__(self, other):
+        return (isinstance(other, type(self))
+                and self.frameid == other.frameid
+                and self.flags == other.flags
+                and self._framespec == other._framespec
+                and all(getattr(self, spec.name, None) == 
+                        getattr(other, spec.name, None)
+                        for spec in self._framespec))
 
     @classmethod
     def _from_data(cls, frameid, data, flags=None):
@@ -83,34 +93,42 @@ class Frame(metaclass=abc.ABCMeta):
             base = type(self).__bases__[0]
             if issubclass(base, Frame) and base._in_version(version): 
                 return base._from_frame(self)
-        raise IncompatibleFrameError("Frame {0} cannot be converted to ID3v2.{1} format".format(self.frameid, version))
+        raise IncompatibleFrameError("Frame {0} cannot be converted "
+                                     "to ID3v2.{1} format".format(self.frameid, version))
 
     def _to_data(self):
         if getattr(self, "_bozo", False):
-            warn("General support for frame {0} is virtually nonexistent; its use is discouraged".format(self.frameid), BozoFrameWarning)
+            warn("General support for frame {0} is virtually "
+                 "nonexistent; its use is discouraged".format(self.frameid), BozoFrameWarning)
         
-        def encode():
+        def encode_fields():
             data = bytearray()
             for spec in self._framespec:
+                if spec._optional and getattr(self, spec.name) is None:
+                    break
                 data.extend(spec.write(self, getattr(self, spec.name)))
             return data
 
         def try_preferred_encodings():
-            for encoding in EncodedStringSpec.preferred_encodings:
-                try:
-                    self.encoding = encoding
-                    return encode()
-                except UnicodeEncodeError:
-                    pass
-                finally:
-                    self.encoding = None
+            orig_encoding = self.encoding
+            try:
+                for encoding in EncodedStringSpec.preferred_encodings:
+                    try:
+                        self.encoding = encoding
+                        return encode_fields()
+                    except UnicodeEncodeError:
+                        pass
+            finally:
+                self.encoding = orig_encoding
             raise ValueError("Could not encode strings")
         
-        if isinstance(self._framespec[0], EncodingSpec) and self.encoding is None:
+        if not isinstance(self._framespec[0], EncodingSpec):
+            return encode_fields()
+        elif self.encoding is None:
             return try_preferred_encodings()
         else:
             try:
-                return encode()
+                return encode_fields()
             except UnicodeEncodeError:
                 return try_preferred_encodings()
 
@@ -186,15 +204,24 @@ class TextFrame(Frame):
 
     def _str_fields(self):
         return "{0} {1}".format((EncodedStringSpec._encodings[self.encoding][0] 
-                                if self.encoding != None else "<undef>"),
+                                if self.encoding is not None else "<undef>"),
                                 ", ".join(repr(t) for t in self.text))
 
     @classmethod
     def _merge(cls, frames):
-        frame = cls(text=[])
+        if len(frames) == 1:
+            return frames
+        res = cls(text=[])
+        enc = None
         for f in frames:
-            frame.text.extend(f.text)
-        return [frame]
+            if enc is None:
+                enc = f.encoding
+            elif enc != f.encoding:
+                enc = False
+            res.text.extend(f.text)
+        if enc is not False:
+            res.encoding = enc
+        return [res]
 
 class URLFrame(Frame):
     _framespec = (URLStringSpec("url"), )

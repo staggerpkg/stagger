@@ -1,5 +1,8 @@
 # Copyright (c) 2009, Karoly Lorentey  <karoly@lorentey.hu>
 
+from stagger.errors import *
+from warnings import warn
+
 class Unsync:
     "Conversion from/to unsynchronized byte sequences."
     @staticmethod
@@ -106,6 +109,8 @@ class Int8:
     def encode(i, *, width=-1):
         "Encodes a nonnegative integer into a big-endian bytearray of given length"
         assert width != 0
+        if i is None:
+            i = 0
         if i < 0: raise ValueError("Nonnegative integer expected")
         data = bytearray()
         while i:
