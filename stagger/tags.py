@@ -4,6 +4,7 @@ import abc
 import struct
 import re
 import collections
+import io
 
 from abc import abstractmethod
 from warnings import warn
@@ -45,7 +46,8 @@ _FRAME24_STATUS_UNKNOWN_MASK = 0x8F00
 
 def read_tag(filename):
     with fileutil.opened(filename, "rb") as file:
-        return detect_tag(file)[0].read(file)
+        (cls, offset, length) = detect_tag(file)
+        return cls.read(file, offset)
 
 def decode_tag(data):
     return read_tag(io.BytesIO(data))
@@ -65,7 +67,9 @@ def detect_tag(filename):
     is the position of the tag in the file.
     """
     with fileutil.opened(filename, "rb") as file:
-        header = file.peek(10)
+        file.seek(0)
+        header = file.read(10)
+        file.seek(0)
         if len(header) < 10:
             raise EOFError
         if header[0:3] != b"ID3":
@@ -74,7 +78,7 @@ def detect_tag(filename):
             raise TagError("Unknown ID3 version: 2.{0}.{1}"
                            .format(*header[3:5]))
         cls = _tag_versions[header[3]]
-        offset = file.tell()
+        offset = 0
         length = Syncsafe.decode(header[6:10]) + 10
         if header[3] == 4 and header[5] & _TAG24_FOOTER:
             length += 10
@@ -107,7 +111,7 @@ def frameclass(cls):
     # Add frameid.
     if not hasattr(cls, "frameid"):
         cls.frameid = cls.__name__
-    assert Tag._is_frame_id(cls.frameid.encode("ASCII"))
+    assert Tag._is_frame_id(cls.frameid)
 
     # Supply _version attribute if missing.
     if len(cls.frameid) == 3:
@@ -188,14 +192,20 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     def __iter__(self):
         for frameid in self._frames:
             yield frameid
+
     def __len__(self):
         return sum(len(self._frames[l]) for l in self._frames)
 
+    def __eq__(self, other):
+        return (self.version == other.version
+                and self.flags == other.flags 
+                and self._frames == other._frames)
+
     def _normalize_key(self, key, unknown_ok=True):
         if Frames.is_frame_class(key):
-            return key.__name__
+            key = key.frameid
         if isinstance(key, str):
-            if not _is_frame_id(key):
+            if not self._is_frame_id(key):
                 raise KeyError("Invalid frame id " + key)
             if key not in self.known_frames:
                 if unknown_ok:
@@ -247,9 +257,10 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     
     # Reading tags
     @classmethod
-    def read(cls, filename):
+    def read(cls, filename, offset=0):
         """Read a tag from a file."""
         with fileutil.opened(filename, "rb") as file:
+            file.seek(offset)
             tag = cls()
             tag._read_header(file)
             for (frameid, bflags, data) in tag._read_frames(file):
@@ -268,12 +279,12 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
         try:
             (flags, data) = self._interpret_frame_flags(bflags, data)
             if flags is None: 
-                flags = []
+                flags = set()
             if frameid in self.known_frames:
                 return self.known_frames[frameid]._from_data(frameid, data, flags)
             else:
                 # Unknown frame
-                flags.append("unknown")
+                flags.add("unknown")
                 if frameid.startswith('T'): # Unknown text frame
                     return Frames.TextFrame._from_data(frameid, data, flags)
                 elif frameid.startswith('W'): # Unknown URL frame
@@ -316,16 +327,21 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
 
     def _get_size_with_padding(self, size_desired, size_actual):
         size = size_actual
-        if (size_desired != None and size < size_desired
+        if (size_desired is not None and size < size_desired
             and (self.padding_max is None or 
                  size_desired - size_actual <= self.padding_max)):
             size = size_desired
         elif self.padding_default:
-            size += self.padding_default
+            size += max(self.padding_default, self.padding_max)
         return size
 
     @staticmethod
     def _is_frame_id(data):
+        if isinstance(data, str):
+            try:
+                data = data.encode("ASCII")
+            except UnicodeEncodeError:
+                return false
         # Allow a single space at end of four-character ids
         # Some programs (e.g. iTunes 8.2) generate such frames when converting
         # from 2.2 to 2.3/2.4 tags.
@@ -345,7 +361,9 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
 
         # Merge duplicate frames
         for frameid in d.keys():
-            d[frameid] = d[frameid][0]._merge(d[frameid])
+            l = d[frameid]
+            if len(l) > 1:
+                d[frameid] = l[0]._merge(l)
 
         self._prepare_framedict(d)
 
@@ -357,9 +375,9 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
                 for frame in d[frameid]:
                     fs.append(frame._to_version(self.version))
             except IncompatibleFrameError:
-                warn("Skipping incompatible frame {0}".format(frameid))
+                warn("Skipping incompatible frame {0}".format(frameid), Warning)
             except ValueError as e:
-                warn("Skipping invalid frame {0} ({1})".format(frameid, e))
+                warn("Skipping invalid frame {0} ({1})".format(frameid, e), Warning)
             else:
                 d2[frameid] = fs
 
@@ -384,7 +402,7 @@ class Tag22(Tag):
         if header[0:5] != b"ID3\x02\00":
             raise TagError("ID3v2.2 header not found")
         if header[5] & 0x80:
-            self.flags.add("unsynchronisation")
+            self.flags.add("unsynchronised")
         if header[5] & 0x40: # Compression bit is ill-defined in standard
             raise TagError("ID3v2.2 tag compression is not supported")
         if header[5] & 0x3F:
@@ -392,7 +410,7 @@ class Tag22(Tag):
         self.size = Syncsafe.decode(header[6:10]) + 10
 
     def _read_frames(self, file):
-        if "unsynchronisation" in self.flags:
+        if "unsynchronised" in self.flags:
             ufile = UnsyncReader(file)
         else:
             ufile = file
@@ -414,7 +432,7 @@ class Tag22(Tag):
 
         data = bytearray()
         # Frame id
-        if len(frame.frameid) != 3 or not self._is_frame_id(frame.frameid.encode("ASCII")):
+        if len(frame.frameid) != 3 or not self._is_frame_id(frame.frameid):
             raise "Invalid ID3v2.2 frame id {0}".format(repr(frame.frameid))
         data.extend(frame.frameid.encode("ASCII"))
         # Size
@@ -427,14 +445,14 @@ class Tag22(Tag):
         frames = self._prepare_frames(self.values())
         framedata = bytearray().join(self.__encode_one_frame(frame)
                                      for frame in frames)
-        if "unsynchronisation" in self.flags:
+        if "unsynchronised" in self.flags:
             framedata = Unsync.encode(framedata)
 
         size = self._get_size_with_padding(size_hint, len(framedata))
 
         data = bytearray()
         data.extend(b"ID3\x02\x00")
-        data.append(0x80 if "unsynchronisation" in self.flags else 0x00)
+        data.append(0x80 if "unsynchronised" in self.flags else 0x00)
         data.extend(Syncsafe.encode(size, width=4))
         data.extend(framedata)
         if size > len(framedata):
@@ -452,7 +470,7 @@ class Tag23(Tag):
         if header[0:5] != b"ID3\x03\x00":
             raise TagError("ID3v2.3 header not found")
         if header[5] & 0x80:
-            self.flags.add("unsynchronisation")
+            self.flags.add("unsynchronised")
         if header[5] & 0x40:
             self.flags.add("extended_header")
         if header[5] & 0x20:
@@ -473,7 +491,7 @@ class Tag23(Tag):
             self.crc32 = struct.unpack("!I", fileutil.xread(file, 4))
 
     def _read_frames(self, file):
-        if "unsynchronisation" in self.flags:
+        if "unsynchronised" in self.flags:
             ufile = UnsyncReader(file)
         else:
             ufile = file
@@ -488,27 +506,27 @@ class Tag23(Tag):
             yield (frameid, bflags, data)
 
     def _interpret_frame_flags(self, bflags, data):
-        flags = []
+        flags = set()
         # Frame encoding flags
         if bflags & _FRAME23_FORMAT_UNKNOWN_MASK:
             raise FrameError("Invalid ID3v2.3 frame encoding flags: 0x{0:X}".format(b))
         if bflags & _FRAME23_FORMAT_COMPRESSED:
-            flags.append("compressed")
+            flags.add("compressed")
             expanded_size = Int8.decode(data[0:4])
             data = zlib.decompress(data[4:], expanded_size)
         if bflags & _FRAME23_FORMAT_ENCRYPTED:
             raise FrameError("Can't read ID3v2.3 encrypted frames")
         if bflags & _FRAME23_FORMAT_GROUP:
-            flags.append("group")
-            flags.append("group{0}".format(data[0])) # Hack
+            flags.add("group")
+            flags.add("group={0}".format(data[0])) # Hack
             data = data[1:]
         # Frame status messages
         if bflags & _FRAME23_STATUS_DISCARD_ON_TAG_ALTER:
-            flags.append("discard_on_tag_alter")
+            flags.add("discard_on_tag_alter")
         if bflags & _FRAME23_STATUS_DISCARD_ON_FILE_ALTER:
-            flags.append("discard_on_file_alter")
+            flags.add("discard_on_file_alter")
         if bflags & _FRAME23_STATUS_READ_ONLY:
-            flags.append("read_only")
+            flags.add("read_only")
         if bflags & _FRAME23_STATUS_UNKNOWN_MASK:
             warn("Unexpected ID3v2.3 frame status flags: 0x{1:X}".format(b), Warning)
         return flags, data
@@ -519,18 +537,22 @@ class Tag23(Tag):
 
         flagval = 0
         frameinfo = bytearray()
-        if frame.flags.get("compressed"):
+        if "compressed" in frame.flags:
             framedata = zlib.compress(framedata)
             flagval |= _FRAME23_FORMAT_COMPRESSED
             frameinfo.extend(Int8.encode(origlen, width=4))
-        if type(frame.flags.get("group")) == int:
-            frameinfo.append(frame.flags["group"])
+        if "group" in frame.flags:
+            grp = 0
+            for flag in frame.flags:
+                if flag.startswith("group="):
+                    grp = int(flag[6:])
+            frameinfo.append(grp)
             flagval |= _FRAME23_FORMAT_GROUP
-        if frame.flags.get("discard_on_tag_alter"):
+        if "discard_on_tag_alter" in frame.flags:
             flagval |= _FRAME23_STATUS_DISCARD_ON_TAG_ALTER
-        if frame.flags.get("discard_on_file_alter"):
+        if "discard_on_file_alter" in frame.flags:
             flagval |= _FRAME23_STATUS_DISCARD_ON_FILE_ALTER
-        if frame.flags.get("read_only"):
+        if "read_only" in frame.flags:
             flagval |= _FRAME23_STATUS_READ_ONLY
 
         data = bytearray()
@@ -553,7 +575,7 @@ class Tag23(Tag):
         frames = self._prepare_frames(self.values())
         framedata = bytearray().join(self.__encode_one_frame(frame)
                                      for frame in frames)
-        if "unsynchronisation" in self.flags:
+        if "unsynchronised" in self.flags:
             framedata = Unsync.encode(framedata)
 
         size = self._get_size_with_padding(size_hint, len(framedata))
@@ -561,7 +583,7 @@ class Tag23(Tag):
         data = bytearray()
         data.extend(b"ID3\x03\x00")
         flagval = 0x00
-        if "unsynchronisation" in self.flags:
+        if "unsynchronised" in self.flags:
             flagval |= 0x80
         data.append(flagval)
         data.extend(Syncsafe.encode(size, width=4))
@@ -583,7 +605,7 @@ class Tag24(Tag):
         if header[0:5] != b"ID3\x04\x00":
             raise TagError("ID3v2 header not found")
         if header[5] & _TAG24_UNSYNCHRONISED:
-            self.flags.add("unsynchronisation")
+            self.flags.add("unsynchronised")
         if header[5] & _TAG24_EXTENDED_HEADER:
             self.flags.add("extended_header")
         if header[5] & _TAG24_EXPERIMENTAL:
@@ -645,22 +667,23 @@ class Tag24(Tag):
             yield (frameid, bflags, data)
 
     def _interpret_frame_flags(self, bflags, data):
-        flags = []
+        flags = set()
         # Frame format flags
         if bflags & _FRAME24_FORMAT_UNKNOWN_MASK:
             raise FrameError("Unknown ID3v2.4 frame encoding flags: 0x{0:X}".format(b))
         if bflags & _FRAME24_FORMAT_GROUP:
-            flags["group"] = data[0]
+            flags.add("group")
+            flags.add("group={0}".format(data[0])) # hack
             data = data[1:]
         if bflags & _FRAME24_FORMAT_COMPRESSED:
-            flags["compressed"] = True
+            flags.add("compressed")
         if bflags & _FRAME24_FORMAT_ENCRYPTED:
             raise FrameError("Can't read ID3v2.4 encrypted frames")
         if bflags & _FRAME24_FORMAT_UNSYNCHRONISED:
-            flags["unsynchronised"] = True
+            flags.add("unsynchronised")
         expanded_size = len(data)
         if bflags & _FRAME24_FORMAT_DATA_LENGTH_INDICATOR:
-            flags["data_length_indicator"]
+            flags.add("data_length_indicator")
             expanded_size = Syncsafe.decode(data[0:4])
             data = data[4:]
         if "unsynchronised" in self.flags:
@@ -669,11 +692,11 @@ class Tag24(Tag):
             data = zlib.decompress(data, expanded_size)
         # Frame status flags
         if bflags & _FRAME24_STATUS_DISCARD_ON_TAG_ALTER:
-            flags["discard_on_tag_alter"] = True
+            flags.add("discard_on_tag_alter")
         if bflags & _FRAME24_STATUS_DISCARD_ON_FILE_ALTER:
-            flags["discard_on_file_alter"] = True
+            flags.add("discard_on_file_alter")
         if bflags & _FRAME24_STATUS_READ_ONLY:
-            flags["read_only"] = True
+            flags.add("read_only")
         if bflags & _FRAME24_STATUS_UNKNOWN_MASK:
             warn("Unexpected status flags on {0} frame: 0x{1:X}".format(frameid, b), Warning)
         return flags, data
@@ -684,31 +707,35 @@ class Tag24(Tag):
 
         flagval = 0
         frameinfo = bytearray()
-        if type(frame.flags.get("group")) == int:
-            frameinfo.append(frame.flags["group"])
+        if "group" in frame.flags:
+            grp = 0
+            for flag in frame.flags:
+                if flag.startswith("group="):
+                    grp = int(flag[6:])
+            frameinfo.append(grp)
             flagval |= _FRAME24_FORMAT_GROUP
-        if frame.flags.get("compressed"):
-            frame.flags["data_length_indicator"] = True
+        if "compressed" in frame.flags:
+            frame.flags.add("data_length_indicator")
             framedata = zlib.compress(framedata)
             flagval |= _FRAME24_FORMAT_COMPRESSED
-        if frame.flags.get("unsynchronised"):
-            frame.flags["data_length_indicator"] = True
+        if "unsynchronised" in frame.flags:
+            frame.flags.add("data_length_indicator")
             framedata = Unsync.encode(framedata)
             flagval |= _FRAME24_FORMAT_UNSYNCHRONISED
-        if frame.flags.get("data_length_indicator"):
+        if "data_length_indicator" in frame.flags:
             frameinfo.extend(Syncsafe.encode(origlen, width=4))
             flagval |= _FRAME24_FORMAT_DATA_LENGTH_INDICATOR
 
-        if frame.flags.get("discard_on_tag_alter"):
+        if "discard_on_tag_alter" in frame.flags:
             flagval |= _FRAME24_STATUS_DISCARD_ON_TAG_ALTER
-        if frame.flags.get("discard_on_file_alter"):
+        if "discard_on_file_alter" in frame.flags:
             flagval |= _FRAME24_STATUS_DISCARD_ON_FILE_ALTER
-        if frame.flags.get("read_only"):
+        if "read_only" in frame.flags:
             flagval |= _FRAME24_STATUS_READ_ONLY
 
         data = bytearray()
         # Frame id
-        if len(frame.frameid) != 4 or not self._is_frame_id(frame.frameid.encode("ASCII")):
+        if len(frame.frameid) != 4 or not self._is_frame_id(frame.frameid):
             raise "Invalid ID3v2.4 frame id {0}".format(repr(frame.frameid))
         data.extend(frame.frameid.encode("ASCII"))
         # Size
@@ -724,9 +751,9 @@ class Tag24(Tag):
 
     def encode(self, size_hint=None):
         frames = self._prepare_frames(self.values())
-        if "unsynchronisation" in self.flags:
+        if "unsynchronised" in self.flags:
             for frame in frames: 
-                frame.flags["unsynchronisation"] = True
+                frame.flags.add("unsynchronised")
         framedata = bytearray().join(self.__encode_one_frame(frame)
                                      for frame in frames)
 
@@ -735,7 +762,7 @@ class Tag24(Tag):
         data = bytearray()
         data.extend(b"ID3\x04\x00")
         flagval = 0x00
-        if "unsynchronisation" in self.flags:
+        if "unsynchronised" in self.flags:
             flagval |= 0x80
         data.append(flagval)
         data.extend(Syncsafe.encode(size, width=4))

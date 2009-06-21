@@ -4,6 +4,7 @@ import abc
 import collections
 
 from abc import abstractmethod
+from warnings import warn
 
 from stagger.conversion import *
 from stagger.errors import *
@@ -190,10 +191,11 @@ class EncodingSpec(ByteSpec):
     def write(self, frame, value):
         return super().write(frame, value)
     def validate(self, frame, value):
+        def norm(s):
+            return s.lower().replace("-", "")
         if isinstance(value, str):
-            value = value.lower().replace("-", "")
             for i in range(len(EncodedStringSpec._encodings)):
-                if EncodedStringSpec._encodings[i][0].lower().replace("-", "") == value:
+                if norm(EncodedStringSpec._encodings[i][0]) == norm(value):
                     value = i
                     break
         if not isinstance(value, int):
@@ -230,12 +232,9 @@ class EncodedStringSpec(Spec):
         return rawstr.decode(enc), data
 
     def write(self, frame, value):
-        if frame.encoding != None:
-            enc, term = self._encodings[frame.encoding]
-            return value.encode(enc) + term
-        else:
-            enc, term = self._encodings[frame.encoding]
-            return value.encode(enc) + term
+        assert frame.encoding is not None
+        enc, term = self._encodings[frame.encoding]
+        return value.encode(enc) + term
 
     def validate(self, frame, value):
         if not isinstance(value, str):
