@@ -19,15 +19,15 @@ def xread(file, length):
 @contextmanager
 def opened(filename, mode):
     "Open filename, or do nothing if filename is already an open file object"
-    if isinstance(filename, io.IOBase):
-        yield filename
-    else:
+    if isinstance(filename, str):
         file = open(filename, mode)
         try: 
             yield file
         finally: 
             if not file.closed:
                 file.close()
+    else:
+        yield filename
 
 def replace_chunk(filename, offset, length, chunk, in_place=True, max_mem=5):
     """Replace length bytes of data with chunk, starting at offset.

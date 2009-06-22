@@ -258,7 +258,7 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     # Reading tags
     @classmethod
     def read(cls, filename, offset=0):
-        """Read a tag from a file."""
+        """Read an ID3v2 tag from a file."""
         with fileutil.opened(filename, "rb") as file:
             file.seek(offset)
             tag = cls()
@@ -400,7 +400,7 @@ class Tag22(Tag):
         self.offset = file.tell()
         header = fileutil.xread(file, 10)
         if header[0:5] != b"ID3\x02\00":
-            raise TagError("ID3v2.2 header not found")
+            raise NoTagError("ID3v2.2 header not found")
         if header[5] & 0x80:
             self.flags.add("unsynchronised")
         if header[5] & 0x40: # Compression bit is ill-defined in standard
@@ -468,7 +468,7 @@ class Tag23(Tag):
         self.offset = file.tell()
         header = fileutil.xread(file, 10)
         if header[0:5] != b"ID3\x03\x00":
-            raise TagError("ID3v2.3 header not found")
+            raise NoTagError("ID3v2.3 header not found")
         if header[5] & 0x80:
             self.flags.add("unsynchronised")
         if header[5] & 0x40:
@@ -603,7 +603,7 @@ class Tag24(Tag):
         self.offset = file.tell()
         header = fileutil.xread(file, 10)
         if header[0:5] != b"ID3\x04\x00":
-            raise TagError("ID3v2 header not found")
+            raise NoTagError("ID3v2 header not found")
         if header[5] & _TAG24_UNSYNCHRONISED:
             self.flags.add("unsynchronised")
         if header[5] & _TAG24_EXTENDED_HEADER:
