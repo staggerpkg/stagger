@@ -905,7 +905,7 @@ genres = (
     "Psychadelic", "Rave", "Showtunes", "Trailer", "Lo-Fi", "Tribal",
     "Acid Punk", "Acid Jazz", "Polka", "Retro", "Musical", "Rock & Roll",
     "Hard Rock",
-    # 80-125: Winamp extensions
+    # 80-125: Winamp extensions (Booty Bass?)
     "Folk", "Folk-Rock", "National Folk", "Swing", "Fast Fusion", "Bebob",
     "Latin", "Revival", "Celtic", "Bluegrass", "Avantgarde", "Gothic Rock",
     "Progressive Rock", "Psychedelic Rock", "Symphonic Rock", "Slow Rock",
@@ -915,8 +915,22 @@ genres = (
     "Folklore", "Ballad", "Power Ballad", "Rhythmic Soul", "Freestyle",
     "Duet", "Punk Rock", "Drum Solo", "A capella", "Euro-House",
     "Dance Hall",
-    # 126-147: Even more esoteric Winamp extensions ("Polsk Punk", indeed)
-    "Goa", "Drum & Bass", "Club House", "Hardcore", "Terror", "Indie",
+    # 126-147: Even more esoteric Winamp extensions
+    #
+    # Note that there are conflicting interpretations for two genre ids:
+    #
+    #      136  "Christian"    vs. "Christian Gangsta Rap"
+    #      140  "Contemporary" vs. "Contemporary Christian"
+    #
+    # The ones on the left come from the 2003 ID3v1 test suite by Martin Nilsson.
+    # http://www.id3.org/Developer_Information?action=AttachFile&do=get&target=id3v1_test_suite.tar.gz
+    #
+    # The ones on the right are used by TagLib, Mutagen, eyeD3 and most other implementations.
+    #
+    # Nilsson's list is slightly less insane, but unfortunately we are stuck with 
+    # "Christian Gangsta Rap".
+    #
+    "Goa", "Drum & Bass", "Club-House", "Hardcore", "Terror", "Indie",
     "BritPop", "Negerpunk", "Polsk Punk", "Beat", "Christian Gangsta Rap",
     "Heavy Metal", "Black Metal", "Crossover", "Contemporary Christian",
     "Christian Rock", "Merengue", "Salsa", "Thrash Metal", "Anime", "JPop",
