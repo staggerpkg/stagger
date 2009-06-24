@@ -71,7 +71,7 @@ def detect_tag(filename):
         header = file.read(10)
         file.seek(0)
         if len(header) < 10:
-            raise EOFError
+            raise NoTagError("File too short")
         if header[0:3] != b"ID3":
             raise NoTagError("ID3v2 tag not found")
         if header[3] not in _tag_versions or header[4] != 0:
@@ -126,48 +126,57 @@ def frameclass(cls):
     return cls
 
 class FrameOrder:
-    """Order frames based on their position in a predefined list of patterns.
+    """Order frames based on their position in a predefined list of patterns, 
+    and their original position in the source tag.
 
     A pattern may be a frame class, or a regular expression that is to be
     matched against the frame id.
 
     >>> order = FrameOrder(TIT1, "T.*", TXXX)
     >>> order.key(TIT1())
-    (0,)
+    (0, 1)
     >>> order.key(TPE1())
-    (1,)
+    (1, 1)
     >>> order.key(TXXX())
-    (2,)
+    (2, 1)
     >>> order.key(APIC())
-    (3,)
+    (3, 1)
+    >>> order.key(APIC(frameno=3))
+    (3, 0, 3)
     """
     def __init__(self, *patterns):
         self.re_keys = []
         self.frame_keys = dict()
+        i = -1
         for (i, pattern) in zip(range(len(patterns)), patterns):
             if isinstance(pattern, str):
-                self.re_keys.append((pattern, (i,)))
+                self.re_keys.append((pattern, i))
             else:
                 assert issubclass(pattern, Frames.Frame)
-                self.frame_keys[pattern] = (i,)
-        self.unknown_key = (i + 1,)
+                self.frame_keys[pattern] = i
+        self.unknown_key = i + 1
 
     def key(self, frame):
         "Return the sort key for the given frame."
+        def keytuple(primary):
+            if frame.frameno is None:
+                return (primary, 1)
+            return (primary, 0, frame.frameno)
+
         # Look up frame by exact match
         if type(frame) in self.frame_keys:
-            return self.frame_keys[type(frame)]
+            return keytuple(self.frame_keys[type(frame)])
 
         # Look up parent frame for v2.2 frames
         if frame._in_version(2) and type(frame).__bases__[0] in self.frame_keys:
-            return self.frame_keys[type(frame).__bases__[0]]
+            return keytuple(self.frame_keys[type(frame).__bases__[0]])
 
         # Try each pattern
         for (pattern, key) in self.re_keys:
             if re.match(pattern, frame.frameid):
-                return key
+                return keytuple(key)
 
-        return self.unknown_key
+        return keytuple(self.unknown_key)
 
     def __repr__(self):
         order = []
@@ -229,7 +238,7 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
         key = self._normalize_key(key, unknown_ok=False)
         if isinstance(value, self.known_frames[key]):
             self._frames[key] = [value]
-
+            return
         if self.known_frames[key]._allow_duplicates:
             if not isinstance(value, collections.Iterable) or isinstance(value, str):
                 raise ValueError("{0} requires a list of frame values".format(key))
@@ -242,6 +251,18 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     def __delitem__(self, key):
         del self._frames[self._normalize_key(key)]
     
+    def frames(self):
+        """Returns a list of frames in this tag, sorted by the order they appeared in the original file.
+        Frames that did not originate from any file are returned at the end of the list, in
+        undefined order.
+        """
+        frames = []
+        for frameid in self._frames.keys():
+            for frame in self._frames[frameid]:
+                frames.append(frame)
+        frames.sort(key=lambda frame: (0, frame.frameno) if frame.frameno is not None else (1,))
+        return frames
+
     def values(self):
         for frameid in self._frames.keys():
             for frame in self._frames[frameid]:
@@ -259,40 +280,42 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     @classmethod
     def read(cls, filename, offset=0):
         """Read an ID3v2 tag from a file."""
+        i = 0
         with fileutil.opened(filename, "rb") as file:
             file.seek(offset)
             tag = cls()
             tag._read_header(file)
             for (frameid, bflags, data) in tag._read_frames(file):
-                frame = tag._frame_from_data(frameid, bflags, data)
+                frame = tag._frame_from_data(frameid, bflags, data, i)
                 l = tag._frames.setdefault(frame.frameid, [])
                 l.append(frame)
                 if file.tell() > tag.offset + tag.size:
                     break
+                i += 1
             return tag
 
     @classmethod
     def decode(cls, data):
         return cls.read(io.BytesIO(data))
 
-    def _frame_from_data(self, frameid, bflags, data):
+    def _frame_from_data(self, frameid, bflags, data, frameno=None):
         try:
             (flags, data) = self._interpret_frame_flags(bflags, data)
             if flags is None: 
                 flags = set()
             if frameid in self.known_frames:
-                return self.known_frames[frameid]._from_data(frameid, data, flags)
+                return self.known_frames[frameid]._from_data(frameid, data, flags, frameno=frameno)
             else:
                 # Unknown frame
                 flags.add("unknown")
                 if frameid.startswith('T'): # Unknown text frame
-                    return Frames.TextFrame._from_data(frameid, data, flags)
+                    return Frames.TextFrame._from_data(frameid, data, flags, frameno=frameno)
                 elif frameid.startswith('W'): # Unknown URL frame
-                    return Frames.URLFrame._from_data(frameid, data, flags)
+                    return Frames.URLFrame._from_data(frameid, data, flags, frameno=frameno)
                 else:
-                    return Frames.UnknownFrame._from_data(frameid, data, flags)
+                    return Frames.UnknownFrame._from_data(frameid, data, flags, frameno=frameno)
         except (FrameError, ValueError, EOFError) as e:
-            return Frames.ErrorFrame(frameid, data, e)
+            return Frames.ErrorFrame(frameid, data, frameno, e)
 
     @abstractmethod
     def _read_header(self, file): pass
@@ -326,13 +349,13 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     padding_max = 1024
 
     def _get_size_with_padding(self, size_desired, size_actual):
-        size = size_actual
+        size = size_actual 
         if (size_desired is not None and size < size_desired
             and (self.padding_max is None or 
                  size_desired - size_actual <= self.padding_max)):
             size = size_desired
         elif self.padding_default:
-            size += max(self.padding_default, self.padding_max)
+            size += min(self.padding_default, self.padding_max)
         return size
 
     @staticmethod
@@ -448,15 +471,17 @@ class Tag22(Tag):
         if "unsynchronised" in self.flags:
             framedata = Unsync.encode(framedata)
 
-        size = self._get_size_with_padding(size_hint, len(framedata))
+        size = self._get_size_with_padding(size_hint, len(framedata) + 10)
 
         data = bytearray()
         data.extend(b"ID3\x02\x00")
         data.append(0x80 if "unsynchronised" in self.flags else 0x00)
-        data.extend(Syncsafe.encode(size, width=4))
+        data.extend(Syncsafe.encode(size - 10, width=4))
+        assert len(data) == 10
         data.extend(framedata)
-        if size > len(framedata):
-            data.extend(b"\x00" * (size - len(framedata)))
+        if size > len(data):
+            data.extend(b"\x00" * (size - len(data)))
+        assert len(data) == size
         return data
 
 class Tag23(Tag):
@@ -578,7 +603,7 @@ class Tag23(Tag):
         if "unsynchronised" in self.flags:
             framedata = Unsync.encode(framedata)
 
-        size = self._get_size_with_padding(size_hint, len(framedata))
+        size = self._get_size_with_padding(size_hint, len(framedata) + 10)
 
         data = bytearray()
         data.extend(b"ID3\x03\x00")
@@ -586,10 +611,12 @@ class Tag23(Tag):
         if "unsynchronised" in self.flags:
             flagval |= 0x80
         data.append(flagval)
-        data.extend(Syncsafe.encode(size, width=4))
+        data.extend(Syncsafe.encode(size - 10, width=4))
+        assert len(data) == 10
         data.extend(framedata)
-        if size > len(framedata):
-            data.extend(b"\x00" * (size - len(framedata)))
+        if size > len(data):
+            data.extend(b"\x00" * (size - len(data)))
+        assert len(data) == size
         return data
 
 class Tag24(Tag):
@@ -757,7 +784,7 @@ class Tag24(Tag):
         framedata = bytearray().join(self.__encode_one_frame(frame)
                                      for frame in frames)
 
-        size = self._get_size_with_padding(size_hint, len(framedata))
+        size = self._get_size_with_padding(size_hint, len(framedata) + 10)
 
         data = bytearray()
         data.extend(b"ID3\x04\x00")
@@ -765,10 +792,12 @@ class Tag24(Tag):
         if "unsynchronised" in self.flags:
             flagval |= 0x80
         data.append(flagval)
-        data.extend(Syncsafe.encode(size, width=4))
+        data.extend(Syncsafe.encode(size - 10, width=4))
+        assert len(data) == 10
         data.extend(framedata)
-        if size > len(framedata):
-            data.extend(b"\x00" * (size - len(framedata)))
+        if size > len(data):
+            data.extend(b"\x00" * (size - len(data)))
+        assert len(data) == size
         return data
 
 

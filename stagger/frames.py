@@ -15,9 +15,10 @@ class Frame(metaclass=abc.ABCMeta):
     _version = tuple()
     _allow_duplicates = False
     
-    def __init__(self, frameid=None, flags=None, **kwargs):
+    def __init__(self, frameid=None, flags=None, frameno=None, **kwargs):
         self.frameid = frameid if frameid else type(self).__name__
         self.flags = flags if flags else set()
+        self.frameno = frameno
         assert len(self._framespec) > 0
         for spec in self._framespec:
             val = kwargs.get(spec.name, None)
@@ -25,11 +26,10 @@ class Frame(metaclass=abc.ABCMeta):
 
     def __setattr__(self, name, value):
         # Automatic validation on assignment
-        if value is not None:
-            for spec in self._framespec:
-                if name == spec.name:
-                    value = spec.validate(self, value)
-                    break
+        for spec in self._framespec:
+            if name == spec.name:
+                value = spec.validate(self, value)
+                break
         super().__setattr__(name, value)
 
     def __eq__(self, other):
@@ -42,8 +42,8 @@ class Frame(metaclass=abc.ABCMeta):
                         for spec in self._framespec))
 
     @classmethod
-    def _from_data(cls, frameid, data, flags=None):
-        frame = cls(frameid=frameid, flags=flags)
+    def _from_data(cls, frameid, data, flags=None, frameno=None):
+        frame = cls(frameid=frameid, flags=flags, frameno=frameno)
         if getattr(frame, "_untested", False):
             warn("Support for {0} is untested; please verify results".format(frameid), 
                  UntestedFrameWarning)
@@ -60,7 +60,7 @@ class Frame(metaclass=abc.ABCMeta):
     def _from_frame(cls, frame):
         "Copy constructor"
         assert frame._framespec == cls._framespec
-        new = cls(flags=frame.flags)
+        new = cls(flags=frame.flags, frameno=frame.frameno)
         for spec in cls._framespec:
             setattr(new, spec.name, getattr(frame, spec.name, None))
         return new
@@ -170,8 +170,8 @@ class UnknownFrame(Frame):
 class ErrorFrame(Frame):
     _framespec = (BinaryDataSpec("data"),)
 
-    def __init__(self, frameid, data, exception, **kwargs):
-        super().__init__(frameid, {}, **kwargs)
+    def __init__(self, frameid, data, exception, frameno=None, **kwargs):
+        super().__init__(frameid=frameid, flags={}, frameno=frameno, **kwargs)
         self.data = data
         self.exception = exception
 
@@ -187,7 +187,7 @@ class TextFrame(Frame):
     _framespec = (EncodingSpec("encoding"),
                   SequenceSpec("text", EncodedStringSpec("text")))
 
-    def __init__(self, *values, frameid=None, flags=None, **kwargs):
+    def __init__(self, *values, frameid=None, flags=None, frameno=None, **kwargs):
         def extract_strs(values):
             if values is None:
                 return
@@ -199,8 +199,8 @@ class TextFrame(Frame):
                         yield v
             else:
                 raise ValueError("Invalid text frame value")
-        super().__init__(frameid=frameid, flags=flags, **kwargs)
-        self.text = list(extract_strs(values))
+        super().__init__(frameid=frameid, flags=flags, frameno=frameno, **kwargs)
+        self.text.extend(list(extract_strs(values)))
 
     def _str_fields(self):
         return "{0} {1}".format((EncodedStringSpec._encodings[self.encoding][0] 
@@ -233,7 +233,6 @@ class CreditsFrame(Frame):
                   MultiSpec("people",
                             EncodedStringSpec("involvement"),
                             EncodedStringSpec("person")))
-
 
 def is_frame_class(cls):
     return (isinstance(cls, type)
