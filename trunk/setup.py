@@ -9,6 +9,7 @@ setup(
     author="Karoly Lorentey",
     author_email="karoly@lorentey.hu",
     packages=["stagger"],
+    scripts=["bin/stagger"],
     description="ID3v1/ID3v2 tag manipulation package in pure Python 3",
     long_description="""
 The package is currently in alpha stage, under active development.

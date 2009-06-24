@@ -42,6 +42,8 @@ class ByteSpec(Spec):
     def write(self, frame, value):
         return bytes([value])
     def validate(self, frame, value):
+        if value is None:
+            return value
         if not isinstance(value, int):
             raise TypeError("Not a byte")
         if  value not in range(256):
@@ -59,6 +61,8 @@ class IntegerSpec(Spec):
     def write(self, frame, value):
         return Int8.encode(value, width=self.width)
     def validate(self, frame, value):
+        if value is None:
+            return value
         if type(value) is not int: 
             raise TypeError("Not an integer: {0}".format(repr(value)))
         if value < 0:
@@ -84,6 +88,8 @@ class SignedIntegerSpec(Spec):
             value += (1 << (self.width << 3))
         return Int8.encode(value, width=self.width)
     def validate(self, frame, value):
+        if value is None:
+            return value
         if type(value) is not int: 
             raise TypeError("Not an integer")
         if value >= (1 << ((self.width << 3) - 1)):
@@ -110,6 +116,8 @@ class VarIntSpec(Spec):
             bytes += 4
         return Int8.encode(bytes * 8, width=1) + Int8.encode(value, width=bytes)
     def validate(self, frame, value):
+        if value is None:
+            return value
         if type(value) is not int:
             raise TypeError("Not an integer")
         if value < 0:
@@ -122,6 +130,8 @@ class BinaryDataSpec(Spec):
     def write(self, frame, value):
         return bytes(value)
     def validate(self, frame, value):
+        if value is None:
+            return bytes()
         if not isinstance(value, collections.ByteString):
             raise TypeError("Not a byte sequence")
         return value
@@ -142,6 +152,8 @@ class SimpleStringSpec(Spec):
             raise ValueError("String length mismatch")
         return data
     def validate(self, frame, value):
+        if value is None:
+            return b" " * self.length
         if not isinstance(value, str):
             raise TypeError("Not a string")
         if len(value) != self.length: 
@@ -160,12 +172,14 @@ class NullTerminatedStringSpec(Spec):
     def write(self, frame, value):
         return value.encode('iso-8859-1') + b"\x00"
     def validate(self, frame, value):
+        if value is None:
+            return ""
         if not isinstance(value, str):
             raise TypeError("Not a string")
         value.encode('iso-8859-1')
         return value
 
-class URLStringSpec(Spec):
+class URLStringSpec(NullTerminatedStringSpec):
     def read(self, frame, data):
         rawstr, sep, data = data.partition(b"\x00")
         if len(rawstr) == 0 and len(data) > 0:
@@ -173,13 +187,6 @@ class URLStringSpec(Spec):
             #warn("Frame {0} includes a text encoding byte".format(frame.frameid), Warning)
             rawstr, sep, data = data.partition(b"\x00")
         return rawstr.decode('iso-8859-1'), data
-    def write(self, frame, value):
-        return value.encode('iso-8859-1') + b"\x00"
-    def validate(self, frame, value):
-        if not isinstance(value, str):
-            raise TypeError("Not a string")
-        value.encode('iso-8859-1')
-        return value
 
 class EncodingSpec(ByteSpec):
     "EncodingSpec must be the first spec."
@@ -191,6 +198,8 @@ class EncodingSpec(ByteSpec):
     def write(self, frame, value):
         return super().write(frame, value)
     def validate(self, frame, value):
+        if value is None:
+            return value
         def norm(s):
             return s.lower().replace("-", "")
         if isinstance(value, str):
@@ -237,9 +246,12 @@ class EncodedStringSpec(Spec):
         return value.encode(enc) + term
 
     def validate(self, frame, value):
+        if value is None:
+            return ""
         if not isinstance(value, str):
             raise TypeError("Not a string")
-        self.write(frame, value)
+        if frame.encoding is not None:
+            self.write(frame, value)
         return value
 
 class EncodedFullTextSpec(EncodedStringSpec):
@@ -268,6 +280,8 @@ class SequenceSpec(Spec):
         return data
 
     def validate(self, frame, values):
+        if values is None:
+            return []
         if isinstance(values, str):
             values = [values]
         return [self.spec.validate(frame, v) for v in values]
@@ -295,6 +309,8 @@ class MultiSpec(Spec):
         return bytes(data)
 
     def validate(self, frame, values):
+        if values is None:
+            return []
         res = []
         for v in values:
             if not isinstance(v, collections.Sequence) or isinstance(v, str):
@@ -325,6 +341,8 @@ class ASPISpec(Spec):
         return data
     
     def validate(self, frame, values):
+        if values is None:
+            return []
         if not isinstance(values, collections.Sequence) or isinstance(values, str):
             raise TypeError("ASPISpec needs a sequence of integers")
         if len(values) != frame.N:
