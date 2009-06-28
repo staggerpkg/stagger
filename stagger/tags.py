@@ -289,12 +289,15 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
             tag = cls()
             tag._read_header(file)
             for (frameid, bflags, data) in tag._read_frames(file):
-                frame = tag._frame_from_data(frameid, bflags, data, i)
-                l = tag._frames.setdefault(frame.frameid, [])
-                l.append(frame)
-                if file.tell() > tag.offset + tag.size:
-                    break
-                i += 1
+                if len(data) == 0:
+                    warn("Ignoring empty frame {0}".format(frameid), Warning)
+                else:
+                    frame = tag._frame_from_data(frameid, bflags, data, i)
+                    l = tag._frames.setdefault(frame.frameid, [])
+                    l.append(frame)
+                    if file.tell() > tag.offset + tag.size:
+                        break
+                    i += 1
             return tag
 
     @classmethod
@@ -401,9 +404,9 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
                 for frame in d[frameid]:
                     fs.append(frame._to_version(self.version))
             except IncompatibleFrameError:
-                warn("Skipping incompatible frame {0}".format(frameid), Warning)
+                warn("Ignoring incompatible frame {0}".format(frameid), Warning)
             except ValueError as e:
-                warn("Skipping invalid frame {0} ({1})".format(frameid, e), Warning)
+                warn("Ignoring invalid frame {0} ({1})".format(frameid, e), Warning)
             else:
                 d2[frameid] = fs
 
