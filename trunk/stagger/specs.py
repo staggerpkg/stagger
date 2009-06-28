@@ -51,52 +51,118 @@ class ByteSpec(Spec):
         return value
 
 class IntegerSpec(Spec):
+    """An 8-bit, big-endian unsigned integer of specified width.
+    Width is the number of bits in the representation.  
+    If width is a sting, it must name a frame attribute to get the
+    width from.
+    The width is automatically rounded up to the nearest multiple of 8.
+    """
     def __init__(self, name, width):
         super().__init__(name)
         self.width = width
+
+    def _width(self, frame):
+        if isinstance(self.width, str):
+            return (getattr(frame, self.width) + 7) // 8
+        else:
+            return (self.width + 7) // 8
+
     def read(self, frame, data):
-        if len(data) < self.width:
+        w = self._width(frame)
+        if len(data) < w:
             raise EOFError()
-        return Int8.decode(data[:self.width]), data[self.width:]
+        return Int8.decode(data[:w]), data[w:]
+
     def write(self, frame, value):
-        return Int8.encode(value, width=self.width)
+        return Int8.encode(value, width=self._width(frame))
+
     def validate(self, frame, value):
         if value is None:
             return value
         if type(value) is not int: 
             raise TypeError("Not an integer: {0}".format(repr(value)))
+        w = self._width(frame)
         if value < 0:
             raise ValueError("Value is negative")
-        if value >= 1 << (self.width << 3):
+        if value >= 1 << (w << 3):
             raise ValueError("Value is too large")
         return value
 
-class SignedIntegerSpec(Spec):
+class SignedIntegerSpec(IntegerSpec):
+    """An 8-bit, big-endian two's-complement signed integer of specified width.
+    Width is the number of bits in the representation.
+    If width is a sting, it must name a frame attribute to get the
+    width from.
+    The width is automatically rounded up to the nearest multiple of 8.
+    """
     def __init__(self, name, width):
-        super().__init__(name)
-        self.width = width
+        super().__init__(name, width=width)
+
     def read(self, frame, data):
-        if len(data) < self.width:
-            raise EOFError()
-        val = Int8.decode(data[:self.width])
-        if data[0] & 0x80:
-            # Negative value
-            val -= (1 << (self.width << 3))
-        return val, data[self.width:]
+        w = self._width(frame)
+        (value, data) = super().read(frame, data)
+        if value & (1 << ((w << 3) - 1)): # Negative value
+            value -= (1 << (w << 3))
+        return value, data
+
     def write(self, frame, value):
+        w = self._width(frame)
         if value < 0:
-            value += (1 << (self.width << 3))
-        return Int8.encode(value, width=self.width)
+            value += (1 << (w << 3))
+        return super().write(frame, value)
+
     def validate(self, frame, value):
         if value is None:
             return value
         if type(value) is not int: 
             raise TypeError("Not an integer")
-        if value >= (1 << ((self.width << 3) - 1)):
+        w = self._width(frame)
+        if value >= (1 << ((w << 3) - 1)):
             raise ValueError("Value is too large")
-        if value < -(1 << ((self.width << 3) - 1)):
+        if value < -(1 << ((w << 3) - 1)):
             raise ValueError("Value is too small")
         return value
+
+class RVADIntegerSpec(IntegerSpec):
+    """An 8-bit, big-endian signed integer in RVAD format.
+    The value is stored in sign + magnitude format,
+    with the sign bit encoded in bit <signbit> of the 
+    frame's <signs> attribute.  A zero sign bit indicates
+    the value is negative.
+    """
+    def __init__(self, name, width, signbit, signs="signs"):
+        super().__init__(name, width)
+        self.signbit = signbit
+        self.signs = signs
+
+    def read(self, frame, data):
+        (value, data) = super().read(frame, data)
+        if not (getattr(frame, self.signs) & (1 << self.signbit)):
+            value *= -1
+        return (value, data)
+
+    def write(self, frame, value):
+        return super().write(frame, abs(value))
+
+    def validate(self, frame, value):
+        if value is None:
+            return value
+        if type(value) is not int: 
+            raise TypeError("Not an integer: {0}".format(repr(value)))
+
+        # Update sign bit in frame.signs.
+        signs = getattr(frame, self.signs)
+        if value < 0:
+            signs &= ~(1 << self.signbit)
+        else:
+            signs |= 1 << self.signbit
+        setattr(frame, self.signs, signs)
+
+        w = self._width(frame)
+        if abs(value) >= 1 << (w << 3):
+            raise ValueError("Value is too large")
+        return value
+        
 
 class VarIntSpec(Spec):
     def read(self, frame, data):
@@ -143,11 +209,11 @@ class SimpleStringSpec(Spec):
         super().__init__(name)
         self.length = length
     def read(self, frame, data):
-        return data[:self.length].decode('iso-8859-1'), data[self.length:]
+        return data[:self.length].decode('latin-1'), data[self.length:]
     def write(self, frame, value):
         if value is None:
             return b" " * self.length
-        data = value.encode('iso-8859-1')
+        data = value.encode('latin-1')
         if len(data) != self.length:
             raise ValueError("String length mismatch")
         return data
@@ -158,7 +224,7 @@ class SimpleStringSpec(Spec):
             raise TypeError("Not a string")
         if len(value) != self.length: 
             raise ValueError("String length mismatch")
-        value.encode('iso-8859-1')
+        value.encode('latin-1')
         return value
 
 class LanguageSpec(SimpleStringSpec):
@@ -168,15 +234,15 @@ class LanguageSpec(SimpleStringSpec):
 class NullTerminatedStringSpec(Spec):
     def read(self, frame, data):
         rawstr, sep, data = data.partition(b"\x00")
-        return rawstr.decode('iso-8859-1'), data
+        return rawstr.decode('latin-1'), data
     def write(self, frame, value):
-        return value.encode('iso-8859-1') + b"\x00"
+        return value.encode('latin-1') + b"\x00"
     def validate(self, frame, value):
         if value is None:
             return ""
         if not isinstance(value, str):
             raise TypeError("Not a string")
-        value.encode('iso-8859-1')
+        value.encode('latin-1')
         return value
 
 class URLStringSpec(NullTerminatedStringSpec):
@@ -186,7 +252,7 @@ class URLStringSpec(NullTerminatedStringSpec):
             # iTunes prepends an extra null byte to WFED frames (encoding spec?)
             #warn("Frame {0} includes a text encoding byte".format(frame.frameid), Warning)
             rawstr, sep, data = data.partition(b"\x00")
-        return rawstr.decode('iso-8859-1'), data
+        return rawstr.decode('latin-1'), data
 
 class EncodingSpec(ByteSpec):
     "EncodingSpec must be the first spec."
@@ -216,7 +282,7 @@ class EncodingSpec(ByteSpec):
         return EncodedStringSpec._encodings[value][0]
 
 class EncodedStringSpec(Spec):
-    _encodings = (('iso-8859-1', b"\x00"),
+    _encodings = (('latin-1', b"\x00"),
                   ('utf-16', b"\x00\x00"),
                   ('utf-16-be', b"\x00\x00"),
                   ('utf-8', b"\x00"))
@@ -352,4 +418,3 @@ class ASPISpec(Spec):
         for v in values:
             res.append(v)
         return res
-

@@ -76,7 +76,7 @@ class Frame(metaclass=abc.ABCMeta):
 
     @classmethod
     def _in_version(self, *versions):
-        "Returns true if this frame is defined in any of the specified versions of ID3."
+        "Returns true if this frame is in any of the specified versions of ID3."
         for version in versions:
             if (self._version == version
                 or (isinstance(self._version, collections.Container) 

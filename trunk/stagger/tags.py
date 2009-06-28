@@ -260,7 +260,10 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
         for frameid in self._frames.keys():
             for frame in self._frames[frameid]:
                 frames.append(frame)
-        frames.sort(key=lambda frame: (0, frame.frameno) if frame.frameno is not None else (1,))
+        frames.sort(key=lambda frame: 
+                    (0, frame.frameno) 
+                    if frame.frameno is not None 
+                    else (1,))
         return frames
 
     def values(self):
@@ -315,7 +318,7 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
                 else:
                     return Frames.UnknownFrame._from_data(frameid, data, flags, frameno=frameno)
         except (FrameError, ValueError, EOFError) as e:
-            return Frames.ErrorFrame(frameid, data, frameno, e)
+            return Frames.ErrorFrame(frameid, data, exception=e, frameno=frameno)
 
     @abstractmethod
     def _read_header(self, file): pass

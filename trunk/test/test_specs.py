@@ -28,7 +28,7 @@ class SpecTestCase(unittest.TestCase):
 
     def testIntegerSpec(self):
         frame = TextFrame(frameid="TEST", encoding=3)
-        spec = IntegerSpec("test", 2)
+        spec = IntegerSpec("test", 16)
         
         # spec.read
         self.assertEqual(spec.read(frame, b"\x01\x02\x03\x04"), (258, b"\x03\x04"))
@@ -47,9 +47,47 @@ class SpecTestCase(unittest.TestCase):
         self.assertRaises(ValueError, spec.validate, frame, 65536)
         self.assertRaises(TypeError, spec.validate, frame, "foobar")
 
+        # Now try specifying an indirect width
+        spec = IntegerSpec("test", "bits")
+
+        # spec.read
+        frame.bits = 8
+        self.assertEqual(spec.read(frame, b"\x01\x02\x03\x04"), (1, b"\x02\x03\x04"))
+        self.assertRaises(EOFError, spec.read, frame, b"")
+        self.assertEqual(spec.read(frame, b"\x01"), (1, b""))
+
+        frame.bits = 16
+        self.assertEqual(spec.read(frame, b"\x01\x02\x03\x04"), (258, b"\x03\x04"))
+        self.assertRaises(EOFError, spec.read, frame, b"")
+        self.assertRaises(EOFError, spec.read, frame, b"\x01")
+
+
+        # spec.write
+        frame.bits = 8
+        self.assertEqual(spec.write(frame, 1), b"\x01")
+        self.assertRaises(ValueError, spec.write, frame, 258)
+        frame.bits = 16
+        self.assertEqual(spec.write(frame, 1), b"\x00\x01")
+        self.assertEqual(spec.write(frame, 258), b"\x01\x02")
+
+        # spec.validate
+        frame.bits = 8
+        self.assertEqual(spec.validate(frame, 5), 5)
+        self.assertRaises(ValueError, spec.validate, frame, -1)
+        self.assertRaises(ValueError, spec.validate, frame, 256)
+        self.assertRaises(ValueError, spec.validate, frame, 65536)
+        self.assertRaises(TypeError, spec.validate, frame, "foobar")
+        frame.bits = 16
+        self.assertEqual(spec.validate(frame, 5), 5)
+        self.assertRaises(ValueError, spec.validate, frame, -1)
+        self.assertEqual(spec.validate(frame, 256), 256)
+        self.assertRaises(ValueError, spec.validate, frame, 65536)
+        self.assertRaises(TypeError, spec.validate, frame, "foobar")
+
+
     def testSignedIntegerSpec(self):
         frame = TextFrame(frameid="TEST", encoding=3)
-        spec = SignedIntegerSpec("test", 2)
+        spec = SignedIntegerSpec("test", 16)
         
         # spec.read
         self.assertEqual(spec.read(frame, b"\x01\x02\x03\x04"), (258, b"\x03\x04"))
@@ -74,6 +112,81 @@ class SpecTestCase(unittest.TestCase):
         self.assertRaises(ValueError, spec.validate, frame, 32768)
         self.assertRaises(ValueError, spec.validate, frame, -32769)
         self.assertRaises(TypeError, spec.validate, frame, "foobar")
+
+    def testRVADIntegerSpec(self):
+        frame = TextFrame(frameid="TEST", encoding=3)
+        spec = RVADIntegerSpec("test", "bits", signbit=4)
+        frame.signs = 0
+        frame.bits = 16
+        
+        # spec.read
+        frame.signs = 255
+        self.assertEqual(spec.read(frame, b"\x01\x02\x03\x04"), 
+                         (258, b"\x03\x04"))
+        frame.signs = 16
+        self.assertEqual(spec.read(frame, b"\x01\x02\x03\x04"), 
+                         (258, b"\x03\x04"))
+        frame.signs = 0
+        self.assertEqual(spec.read(frame, b"\x01\x02\x03\x04"), 
+                         (-258, b"\x03\x04"))        
+        frame.signs = 239
+        self.assertEqual(spec.read(frame, b"\x01\x02\x03\x04"), 
+                         (-258, b"\x03\x04"))
+        
+        frame.signs = 255
+        self.assertEqual(spec.read(frame, b"\x01\x02"), (258, b""))
+        self.assertEqual(spec.read(frame, b"\xFF\xFF"), (65535, b""))
+        self.assertEqual(spec.read(frame, b"\x80\x00"), (32768, b""))
+        self.assertRaises(EOFError, spec.read, frame, b"")
+        self.assertRaises(EOFError, spec.read, frame, b"\x01")
+
+        frame.signs = 0
+        self.assertEqual(spec.read(frame, b"\x01\x02"), (-258, b""))
+        self.assertEqual(spec.read(frame, b"\xFF\xFF"), (-65535, b""))
+        self.assertEqual(spec.read(frame, b"\x80\x00"), (-32768, b""))
+        self.assertRaises(EOFError, spec.read, frame, b"")
+        self.assertRaises(EOFError, spec.read, frame, b"\x01")
+
+
+
+        # spec.write
+        frame.signs = 0
+        self.assertEqual(spec.write(frame, 1), b"\x00\x01")
+        self.assertEqual(spec.write(frame, 258), b"\x01\x02")
+        self.assertEqual(spec.write(frame, 32768), b"\x80\x00")
+        self.assertEqual(frame.signs, 0) # Write shouldn't update signs
+        self.assertEqual(spec.write(frame, -1), b"\x00\x01")
+        self.assertEqual(spec.write(frame, -258), b"\x01\x02")
+        self.assertEqual(spec.write(frame, -32768), b"\x80\x00")
+        self.assertEqual(frame.signs, 0)
+
+        # spec.validate
+        frame.signs = 0
+        self.assertEqual(spec.validate(frame, 5), 5)
+        self.assertEqual(frame.signs, 16)  # Validate updates signs
+
+        frame.signs = 0
+        self.assertEqual(spec.validate(frame, -1), -1)
+        self.assertEqual(frame.signs, 0)
+
+        frame.signs = 0
+        self.assertEqual(spec.validate(frame, 65535), 65535)
+        self.assertEqual(frame.signs, 16)
+
+        frame.signs = 0
+        self.assertEqual(spec.validate(frame, -65535), -65535)
+        self.assertEqual(frame.signs, 0)
+
+        frame.signs = 0
+        self.assertRaises(ValueError, spec.validate, frame, 65536)
+        self.assertEqual(frame.signs, 16)
+
+        frame.signs = 0
+        self.assertRaises(ValueError, spec.validate, frame, -65536)
+        self.assertEqual(frame.signs, 0)
+
+        self.assertRaises(TypeError, spec.validate, frame, "foobar")
+
 
     def testVarIntSpec(self):
         frame = TextFrame(frameid="TEST", encoding=3)
@@ -227,7 +340,7 @@ class SpecTestCase(unittest.TestCase):
         self.assertRaises(EOFError, spec.read, frame, b"\x00F\x00")
 
         # spec.write
-        frame.encoding = "iso-8859-1"
+        frame.encoding = "latin-1"
         self.assertEqual(spec.write(frame, ""), b"\x00")
         self.assertEqual(spec.write(frame, "Foobar"), b"Foobar\x00") 
         self.assertRaises(UnicodeEncodeError, spec.write, frame, "\u0100")
@@ -243,7 +356,7 @@ class SpecTestCase(unittest.TestCase):
         self.assertEqual(spec.write(frame, "B"), b"\x00B\x00\x00")
         
         # spec.validate
-        for encoding in ["iso-8859-1", "utf-16", "utf-16-be", "utf-8"]:
+        for encoding in ["latin-1", "utf-16", "utf-16-be", "utf-8"]:
             frame.encoding = encoding
             self.assertEqual(spec.validate(frame, ""), "")
             self.assertEqual(spec.validate(frame, "foo"), "foo")
@@ -251,7 +364,7 @@ class SpecTestCase(unittest.TestCase):
             self.assertRaises(TypeError, spec.validate, frame, -1)
             self.assertRaises(TypeError, spec.validate, frame, 4)
             self.assertRaises(TypeError, spec.validate, frame, 3.4)
-        frame.encoding = "iso-8859-1"
+        frame.encoding = "latin-1"
         self.assertRaises(UnicodeEncodeError, spec.validate, frame, "\u0100")
 
     def testSequenceSpec(self):
@@ -285,7 +398,7 @@ class SpecTestCase(unittest.TestCase):
         frame = TextFrame(frameid="TEST", encoding=3)
         spec = MultiSpec("test", 
                          NullTerminatedStringSpec("text"), 
-                         IntegerSpec("value", 2))
+                         IntegerSpec("value", 16))
 
         # spec.read
         self.assertEqual(spec.read(frame, b""), ([], b""))

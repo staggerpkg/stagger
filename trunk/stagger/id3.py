@@ -283,15 +283,15 @@ class MCDI(Frame):
 class ETCO(Frame):
     "Event timing codes"
     _framespec = (ByteSpec("format"),
-                  MultiSpec("events", ByteSpec("type"), IntegerSpec("timestamp", 4)))
+                  MultiSpec("events", ByteSpec("type"), IntegerSpec("timestamp", 32)))
     _untested = True
     _bozo = True
 
 @frameclass
 class MLLT(Frame):
     "MPEG location lookup table"
-    _framespec = (IntegerSpec("frames", 2), IntegerSpec("bytes", 3),
-                  IntegerSpec("milliseconds", 3),
+    _framespec = (IntegerSpec("frames", 16), IntegerSpec("bytes", 24),
+                  IntegerSpec("milliseconds", 24),
                   ByteSpec("bits_for_bytes"), ByteSpec("bits_for_milliseconds"),
                   BinaryDataSpec("data"))
     _untested = True
@@ -310,7 +310,6 @@ class USLT(Frame):
     _framespec = (EncodingSpec("encoding"), LanguageSpec("lang"),
                   EncodedStringSpec("desc"), EncodedFullTextSpec("text"))
     _allow_duplicates = True
-    _untested = True
     
 @frameclass
 class SYLT(Frame):
@@ -318,7 +317,8 @@ class SYLT(Frame):
     _framespec = (EncodingSpec("encoding"), LanguageSpec("lang"),
                   ByteSpec("format"), ByteSpec("type"),
                   EncodedStringSpec("desc"),
-                  MultiSpec("data", EncodedFullTextSpec("text"), IntegerSpec("timestamp", 4)))
+                  MultiSpec("data", EncodedFullTextSpec("text"), 
+                            IntegerSpec("timestamp", 32)))
     _allow_duplicates = True
     _untested = True
     _bozo = True
@@ -336,18 +336,17 @@ class RVA2(Frame):
     _framespec = (NullTerminatedStringSpec("desc"),
                   MultiSpec("adjustment",
                             ByteSpec("channel"),
-                            IntegerSpec("gain", 2),  # * 512
+                            IntegerSpec("gain", 16),  # * 512
                             VarIntSpec("peak")))
     _allow_duplicates = True
-    _untested = True
 
 @frameclass
 class EQU2(Frame):
     "Equalisation (2)"
     _framespec = (ByteSpec("method"), NullTerminatedStringSpec("desc"),
                   MultiSpec("adjustments",
-                            IntegerSpec("frequency", 2), # in 0.5Hz
-                            SignedIntegerSpec("adjustment", 2))) # * 512x
+                            IntegerSpec("frequency", 16), # in 0.5Hz
+                            SignedIntegerSpec("adjustment", 16))) # * 512x
     _allow_duplicates = True
     _untested = True
     _bozo = True
@@ -355,8 +354,8 @@ class EQU2(Frame):
 @frameclass
 class RVRB(Frame):
     "Reverb"
-    _framespec = (IntegerSpec("left", 2),
-                  IntegerSpec("right", 2),
+    _framespec = (IntegerSpec("left", 16),
+                  IntegerSpec("right", 16),
                   ByteSpec("bounce_left"), ByteSpec("bounce_right"),
                   ByteSpec("feedback_ltl"), ByteSpec("feedback_ltr"),
                   ByteSpec("feedback_rtr"), ByteSpec("feedback_rtl"),
@@ -407,7 +406,7 @@ class GEOB(Frame):
 @frameclass
 class PCNT(Frame):
     "Play counter"
-    _framespec = (IntegerSpec("count", 4),)
+    _framespec = (IntegerSpec("count", 32),)
 
 @frameclass
 class POPM(Frame):
@@ -415,15 +414,15 @@ class POPM(Frame):
     _framespec = (NullTerminatedStringSpec("email"),
                   ByteSpec("rating"),
                   # Windows Vista's explorer does not generate a count
-                  optionalspec(IntegerSpec("count", 4)))
+                  optionalspec(IntegerSpec("count", 32)))
     _allow_duplicates = True
 
 @frameclass
 class RBUF(Frame):
     "Recommended buffer size"
-    _framespec = (IntegerSpec("size", 4),
+    _framespec = (IntegerSpec("size", 32),
                   optionalspec(ByteSpec("info")),
-                  optionalspec(IntegerSpec("offset", 4)))
+                  optionalspec(IntegerSpec("offset", 32)))
     _untested = True
     _bozo = True
 
@@ -431,8 +430,8 @@ class RBUF(Frame):
 class AENC(Frame):
     "Audio encryption"
     _framespec = (NullTerminatedStringSpec("owner"),
-                  IntegerSpec("preview_start", 2),
-                  IntegerSpec("preview_length", 2),
+                  IntegerSpec("preview_start", 16),
+                  IntegerSpec("preview_length", 16),
                   BinaryDataSpec("data"))
     _allow_duplicates = True
     _untested = True
@@ -452,7 +451,7 @@ class LINK(Frame):
 class POSS(Frame):
     "Position synchronisation frame"
     _framespec = (ByteSpec("format"),
-                  IntegerSpec("position", 4))
+                  IntegerSpec("position", 32))
     _untested = True
     _bozo = True
 
@@ -532,7 +531,7 @@ class SIGN(Frame):
 @frameclass
 class SEEK(Frame):
     "Seek frame"
-    _framespec = (IntegerSpec("offset", 4), )
+    _framespec = (IntegerSpec("offset", 32), )
     _untested = True
     _bozo = True
     _version = 4
@@ -540,9 +539,9 @@ class SEEK(Frame):
 @frameclass
 class ASPI(Frame):
     "Audio seek point index"
-    _framespec = (IntegerSpec("S", 4),
-                  IntegerSpec("L", 4),
-                  IntegerSpec("N", 2),
+    _framespec = (IntegerSpec("S", 32),
+                  IntegerSpec("L", 32),
+                  IntegerSpec("N", 16),
                   ByteSpec("b"),
                   ASPISpec("Fi"))
     _version = 4
@@ -621,11 +620,21 @@ class EQUA(Frame):
 @frameclass
 class RVAD(Frame):
     """Relative volume adjustment
-    Replaced by RVA2 in id3v2.4
+    Replaced by RVA2 in id3v2.4.
     """
-    _framespec = (BinaryDataSpec("data"),)
-    _untested = True
-    _bozo = True
+    _framespec = (ByteSpec("signs"), ByteSpec("bits"),
+                  RVADIntegerSpec("vol_right", "bits", 0),
+                  RVADIntegerSpec("vol_left", "bits", 1),
+                  IntegerSpec("peak_right", "bits"),
+                  IntegerSpec("peak_left", "bits"),
+                  optionalspec(RVADIntegerSpec("vol_right_back", "bits", 2)),
+                  optionalspec(RVADIntegerSpec("vol_left_back", "bits", 3)),
+                  optionalspec(IntegerSpec("peak_right_back", "bits")),
+                  optionalspec(IntegerSpec("peak_left_back", "bits")),
+                  optionalspec(RVADIntegerSpec("vol_center", "bits", 4)),
+                  optionalspec(IntegerSpec("peak_center", "bits")),
+                  optionalspec(RVADIntegerSpec("vol_bass", "bits", 5)),
+                  optionalspec(IntegerSpec("peak_bass", "bits")))
     _version = 3
 
 # ID3v2.2
@@ -874,11 +883,36 @@ class PCST(Frame):
     If this frame is present, iTunes considers the file to be a podcast.
     Value should be zero.
     """
-    _framespec = (IntegerSpec("value", 4),)
+    _framespec = (IntegerSpec("value", 32),)
     _nonstandard = True
 @frameclass
 class PCS(PCST): pass
 
+@frameclass
+class TST(TSOT):
+    _nonstandard = True
+
+@frameclass
+class TSA(TSOA):
+    _nonstandard = True
+
+@frameclass
+class TSP(TSOP):
+    _nonstandard = True
+
+@frameclass
+class TSO2(TextFrame):
+    """iTunes: Album Artist sort order"""
+    _nonstandard = True
+@frameclass
+class TS2(TSO2): pass
+
+@frameclass
+class TSOC(TextFrame):
+    """iTunes: Sort Composer"""
+    _nonstandard = True
+@frameclass
+class TSC(TSOC): pass
 
 # Attached picture (APIC & PIC) types
 picture_types = (
@@ -925,9 +959,9 @@ genres = (
     # The ones on the left come from the 2003 ID3v1 test suite by Martin Nilsson.
     # http://www.id3.org/Developer_Information?action=AttachFile&do=get&target=id3v1_test_suite.tar.gz
     #
-    # The ones on the right are used by TagLib, Mutagen, eyeD3 and most other implementations.
+    # The ones on the right are used by TagLib, Mutagen and most other ID3v1 implementations.
     #
-    # Nilsson's list is slightly less insane, but unfortunately we are stuck with 
+    # Nilsson's list is slightly less insane, but we are stuck with
     # "Christian Gangsta Rap".
     #
     "Goa", "Drum & Bass", "Club-House", "Hardcore", "Terror", "Indie",
