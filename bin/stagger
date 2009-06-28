@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+# Copyright (c) 2009, Karoly Lorentey  <karoly@lorentey.hu>
+
+import sys
+import codecs
+import locale
+from optparse import OptionParser
+
+import stagger
+import stagger.fileutil
+from stagger.id3 import *
+
+# Work around idiotical python encoding heuristics:
+# Use locale-specified encoding on both stdout and stderr,
+# regardless of whether they are ttys
+sys.stdout = codecs.getwriter(locale.getpreferredencoding())(sys.stdout.buffer)
+sys.stderr = codecs.getwriter(locale.getpreferredencoding())(sys.stderr.buffer)
+
+versionstr = ".".join((str(v) for v in stagger.version))
+
+parser = OptionParser(usage="%prog [options] file1.mp3 [file2.mp3...]",
+                      version="%prog " + versionstr)
+
+parser.add_option("-d", "--delete", action="store_true", dest="delete",
+                  help="Delete tag from file")
+
+parser.add_option("--dump",
+                  action="store_true", dest="dump",
+                  help="Dump raw binary tag to stdout")
+
+parser.add_option("--load",
+                  action="store_true", dest="load",
+                  help="Load binary tag dump from stdin and apply to file")
+
+parser.add_option("-l", "--low", 
+                  action="store_true", dest="low",
+                  help="Print low-level frame ids "
+                  "instead of descriptive names")
+
+(options, args) = parser.parse_args()
+
+def dump_tag(filename):
+    with open(filename, "rb") as file:
+        try:
+            (cls, offset, length) = stagger.tags.detect_tag(file)
+        except stagger.NoTagError:
+            return bytes()
+        file.seek(offset)
+        return file.read(length)
+
+def load_tag(filename, data):
+    with open(filename, "rb+") as file:
+        try:
+            (cls, offset, length) = stagger.tags.detect_tag(file)
+        except stagger.NoTagError:
+            (offset, length) = (0, 0)
+        stagger.fileutil.replace_chunk(file, offset, length, data)
+    
+if options.dump:
+    if len(args) != 1:
+        parser.error("--dump requires a single file argument")
+        exit(1)
+    sys.stdout.stream.write(dump_tag(args[0]))
+    exit(0)
+
+if options.load:
+    if len(args) != 1:
+        parser.error("--load requires a single file argument")
+        exit(1)
+    data = sys.stdin.buffer.read()
+    if not data.startswith(b"ID3"):
+        parser.error("invalid tag data")
+        exit(1)
+    load_tag(args[0], data)
+    exit(0)
+
+if options.delete:
+    for filename in args:
+        stagger.delete_tag(filename)
+    exit(0)
+
+for file in args:
+    try:
+        tag = stagger.read_tag(file)
+        print(file + ": " + str(tag))
+        for frame in tag.frames():
+            print("   " + str(frame))
+        print()
+    except stagger.NoTagError:
+        print(file + ": No tag")
