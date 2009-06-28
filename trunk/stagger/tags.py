@@ -215,12 +215,12 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
             key = key.frameid
         if isinstance(key, str):
             if not self._is_frame_id(key):
-                raise KeyError("Invalid frame id " + key)
+                raise KeyError("{0}: Invalid frame id".format(key))
             if key not in self.known_frames:
                 if unknown_ok:
-                    warn("Unknown frame id " + key, Warning)
+                    warn("{0}: Unknown frame id".format(key), UnknownFrameWarning)
                 else:
-                    raise KeyError("Unknown frame id " + key)
+                    raise KeyError("{0}: Unknown frame id".format(key))
         return key
 
     def __getitem__(self, key):
@@ -290,7 +290,7 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
             tag._read_header(file)
             for (frameid, bflags, data) in tag._read_frames(file):
                 if len(data) == 0:
-                    warn("Ignoring empty frame {0}".format(frameid), 
+                    warn("{0}: Ignoring empty frame".format(frameid), 
                          EmptyFrameWarning)
                 else:
                     frame = tag._frame_from_data(frameid, bflags, data, i)
@@ -318,6 +318,8 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
             else:
                 # Unknown frame
                 flags.add("unknown")
+                warn("{0}: Unknown frame".format(frameid), 
+                     UnknownFrameWarning)
                 if frameid.startswith('T'): # Unknown text frame
                     return Frames.TextFrame._from_data(frameid, data, flags, 
                                                        frameno=frameno)
@@ -328,6 +330,7 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
                     return Frames.UnknownFrame._from_data(frameid, data, flags, 
                                                           frameno=frameno)
         except (FrameError, ValueError, EOFError) as e:
+            warn("{0}: Invalid frame".format(frameid), ErrorFrameWarning)
             return Frames.ErrorFrame(frameid, data, exception=e, frameno=frameno)
 
     @abstractmethod
@@ -411,9 +414,11 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
                 for frame in d[frameid]:
                     fs.append(frame._to_version(self.version))
             except IncompatibleFrameError:
-                warn("Ignoring incompatible frame {0}".format(frameid), Warning)
+                warn("{0}: Ignoring incompatible frame".format(frameid), 
+                     FrameWarning)
             except ValueError as e:
-                warn("Ignoring invalid frame {0} ({1})".format(frameid, e), Warning)
+                warn("{0}: Ignoring invalid frame ({1})".format(frameid, e), 
+                     FrameWarning)
             else:
                 d2[frameid] = fs
 
@@ -442,7 +447,7 @@ class Tag22(Tag):
         if header[5] & 0x40: # Compression bit is ill-defined in standard
             raise TagError("ID3v2.2 tag compression is not supported")
         if header[5] & 0x3F:
-            warn("Unknown ID3v2.2 flags", Warning)
+            warn("Unknown ID3v2.2 flags", TagWarning)
         self.size = Syncsafe.decode(header[6:10]) + 10
 
     def _read_frames(self, file):
@@ -514,16 +519,17 @@ class Tag23(Tag):
         if header[5] & 0x20:
             self.flags.add("experimental")
         if header[5] & 0x1F:
-            warn("Unknown ID3v2.3 flags", Warning)
+            warn("Unknown ID3v2.3 flags", TagWarning)
         self.size = Syncsafe.decode(header[6:10]) + 10
         if "extended_header" in self.flags:
             self.__read_extended_header()
 
     def __read_extended_header(self, file):
-        (size, ext_flags, self.padding_size) = struct.unpack("!IHI", 
-                                                             fileutil.xread(file, 10))
+        (size, ext_flags, self.padding_size) = \
+            struct.unpack("!IHI", fileutil.xread(file, 10))
         if size != 6 and size != 10:
-            warn("Unexpected size of ID3v2.3 extended header: {0}".format(size), Warning)
+            warn("Unexpected size of ID3v2.3 extended header: {0}".format(size), 
+                 TagWarning)
         if ext_flags & 128:
             self.flags.add("ext:crc_present")
             self.crc32 = struct.unpack("!I", fileutil.xread(file, 4))
@@ -566,7 +572,8 @@ class Tag23(Tag):
         if bflags & _FRAME23_STATUS_READ_ONLY:
             flags.add("read_only")
         if bflags & _FRAME23_STATUS_UNKNOWN_MASK:
-            warn("Unexpected ID3v2.3 frame status flags: 0x{1:X}".format(b), Warning)
+            warn("Unexpected ID3v2.3 frame status flags: 0x{1:X}".format(b), 
+                 TagWarning)
         return flags, data
 
     def __encode_one_frame(self, frame):
@@ -653,7 +660,7 @@ class Tag24(Tag):
         if header[5] & _TAG24_FOOTER:
             self.flags.add("footer")
         if header[5] & _TAG24_UNKNOWN_MASK:
-            warn("Unknown ID3v2.4 flags", Warning)
+            warn("Unknown ID3v2.4 flags", TagWarning)
         self.size = (Syncsafe.decode(header[6:10]) + 10 
                      + (10 if "footer" in self.flags else 0))
         if "extended_header" in self.flags:
@@ -669,12 +676,15 @@ class Tag24(Tag):
     def __read_extended_header(self, file):
         size = Syncsafe.decode(fileutil.xread(file, 4))
         if size < 6:
-            warn("Unexpected size of ID3v2.4 extended header: {0}".format(size), Warning)
+            warn("Unexpected size of ID3v2.4 extended header: {0}".format(size), 
+                 TagWarning)
         data = fileutil.xread(file, size - 4)
 
         numflags = data[0]
         if numflags != 1:
-            warn("Unexpected number of ID3v2.4 extended flag bytes: {0}".format(numflags), Warning)
+            warn("Unexpected number of ID3v2.4 extended flag bytes: {0}"
+                 .format(numflags), 
+                 TagWarning)
         flags = data[1]
         data = data[1+numflags:]
         if flags & 0x40:
@@ -738,7 +748,9 @@ class Tag24(Tag):
         if bflags & _FRAME24_STATUS_READ_ONLY:
             flags.add("read_only")
         if bflags & _FRAME24_STATUS_UNKNOWN_MASK:
-            warn("Unexpected status flags on {0} frame: 0x{1:X}".format(frameid, b), Warning)
+            warn("Unexpected status flags on {0} frame: 0x{1:X}"
+                 .format(frameid, b), 
+                 TagWarning)
         return flags, data
 
     def __encode_one_frame(self, frame):
