@@ -45,8 +45,7 @@ class Frame(metaclass=abc.ABCMeta):
     def _from_data(cls, frameid, data, flags=None, frameno=None):
         frame = cls(frameid=frameid, flags=flags, frameno=frameno)
         if getattr(frame, "_untested", False):
-            warn("Support for {0} is untested; please verify results"
-                 .format(frameid), 
+            warn("{0}: Untested frame; please verify results".format(frameid),
                  UntestedFrameWarning)
         for spec in frame._framespec:
             try:
@@ -72,7 +71,9 @@ class Frame(metaclass=abc.ABCMeta):
             return frames
         else:
             if len(frames) > 1:
-                warn("Frame {0} duplicated, only the last instance is kept".format(frames[0].frameid))
+                warn("{0}: Duplicate frame; only the last instance is kept"
+                     .format(frames[0].frameid),
+                     DuplicateFrameWarning)
             return frames[-1:]
 
     @classmethod
@@ -99,8 +100,9 @@ class Frame(metaclass=abc.ABCMeta):
 
     def _to_data(self):
         if getattr(self, "_bozo", False):
-            warn("General support for frame {0} is virtually "
-                 "nonexistent; its use is discouraged".format(self.frameid), BozoFrameWarning)
+            warn("{0}: Frame type is not widely implemented, "
+                 "its use is discouraged".format(self.frameid), 
+                 BozoFrameWarning)
         
         def encode_fields():
             data = bytearray()
@@ -212,7 +214,8 @@ class TextFrame(Frame):
     def _from_data(cls, frameid, data, flags=None, frameno=None):
         frame = super()._from_data(frameid, data, flags=flags, frameno=frameno)
         if len(frame.text) == 0 or sum(len(t) for t in frame.text) == 0:
-            warn("Ignoring empty text frame {0}".format(frameid), EmptyFrameWarning)
+            warn("{0}: Ignoring empty text frame".format(frameid), 
+                 EmptyFrameWarning)
             return None
         return frame
 
