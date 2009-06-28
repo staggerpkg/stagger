@@ -78,6 +78,7 @@ def print_stats():
         print("utime={0}".format(usage.ru_utime), file=sys.stderr)
         print("stime={0}".format(usage.ru_stime), file=sys.stderr)
         print("maxrss={0}".format(usage.ru_maxrss), file=sys.stderr)
+        print("page_faults={0}".format(usage.ru_majflt), file=sys.stderr)
     except (ImportError, AttributeError, ValueError):
         pass
 
