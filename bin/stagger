@@ -45,6 +45,11 @@ group.add_option("--dump",
 group.add_option("--load",
                  action="store", dest="load", metavar="FILE",
                  help="Load binary tag dump from stdin and apply to FILE")
+
+group.add_option("--stats",
+                 action="store_true", dest="stats",
+                 help="Print resource usage statistics to stderr before exiting")
+
 parser.add_option_group(group)
 
 (options, args) = parser.parse_args()
@@ -66,14 +71,23 @@ def load_tag(filename, data):
             (offset, length) = (0, 0)
         stagger.fileutil.replace_chunk(file, offset, length, data)
     
+def print_stats():
+    try:
+        import resource
+        usage = resource.getrusage(resource.RUSAGE_SELF)
+        print("utime={0}".format(usage.ru_utime), file=sys.stderr)
+        print("stime={0}".format(usage.ru_stime), file=sys.stderr)
+        print("maxrss={0}".format(usage.ru_maxrss), file=sys.stderr)
+    except (ImportError, AttributeError, ValueError):
+        pass
+
 if options.dump:
     if len(args) != 1:
         parser.error("--dump requires a single file argument")
         exit(1)
     sys.stdout.stream.write(dump_tag(args[0]))
-    exit(0)
 
-if options.load:
+elif options.load:
     if len(args) != 1:
         parser.error("--load requires a single file argument")
         exit(1)
@@ -82,30 +96,36 @@ if options.load:
         parser.error("invalid tag data")
         exit(1)
     load_tag(args[0], data)
-    exit(0)
 
-if options.delete:
+elif options.delete:
     for filename in args:
         stagger.delete_tag(filename)
-    exit(0)
 
-for filename in args:
-    with warnings.catch_warnings(record=True) as ws:
-        tag = None
-        try:
-            tag = stagger.read_tag(filename)
-            print(filename + ": " + str(tag))
-            sys.stdout.flush()
-        except stagger.NoTagError:
-            print(filename + ":error: No tag", file=sys.stderr)
-        except stagger.Error as e:
-            print(filename + ":error: " + ", ".join(e.args[0]), file=sys.stderr)
-        if not options.quiet and len(ws) > 0:
-            for w in ws:
-                print(filename + ":warning: " + str(w.message), file=sys.stderr)
-        sys.stderr.flush()
-        if tag:
-            for frame in tag.frames():
-                print("   " + str(frame))
-        print()
-        sys.stdout.flush()
+else: # print
+    for filename in args:
+        with warnings.catch_warnings(record=True) as ws:
+            tag = None
+            try:
+                tag = stagger.read_tag(filename)
+                print(filename + ": " + str(tag))
+                sys.stdout.flush()
+            except stagger.NoTagError:
+                print(filename + ":error: No tag", file=sys.stderr)
+            except stagger.Error as e:
+                print(filename + ":error: " + ", ".join(e.args[0]), 
+                      file=sys.stderr)
+                if not options.quiet and len(ws) > 0:
+                    for w in ws:
+                        print(filename + ":warning: " + str(w.message), 
+                              file=sys.stderr)
+                sys.stderr.flush()
+                if tag:
+                    for frame in tag.frames():
+                        print("   " + str(frame))
+                    print()
+                sys.stdout.flush()
+
+if options.stats:
+    print_stats()
+
+exit(0)
