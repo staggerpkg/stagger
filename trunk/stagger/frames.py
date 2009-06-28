@@ -154,7 +154,12 @@ class Frame(metaclass=abc.ABCMeta):
 
     def _str_fields(self):
         fields = []
-        for spec in self._framespec:
+        # Determine how many fields to show
+        cutoff = max(i for i in range(len(self._framespec)) 
+                     if i == 0 # don't call max with an the empty sequence
+                     or not self._framespec[i]._optional 
+                     or getattr(self, self._framespec[i].name, None) is not None)
+        for spec in self._framespec[:cutoff + 1]:
             fields.append(spec.to_str(getattr(self, spec.name, None)))
         return ", ".join(fields)
         
@@ -203,9 +208,10 @@ class TextFrame(Frame):
         self.text.extend(list(extract_strs(values)))
 
     def _str_fields(self):
-        return "{0} {1}".format((EncodedStringSpec._encodings[self.encoding][0] 
-                                if self.encoding is not None else "<undef>"),
-                                ", ".join(repr(t) for t in self.text))
+        return ", ".join(repr(t) for t in self.text)
+#        return "{0} {1}".format((EncodedStringSpec._encodings[self.encoding][0] 
+#                                if self.encoding is not None else "<undef>"),
+#                                ", ".join(repr(t) for t in self.text))
 
     @classmethod
     def _merge(cls, frames):
