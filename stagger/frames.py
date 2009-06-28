@@ -45,7 +45,8 @@ class Frame(metaclass=abc.ABCMeta):
     def _from_data(cls, frameid, data, flags=None, frameno=None):
         frame = cls(frameid=frameid, flags=flags, frameno=frameno)
         if getattr(frame, "_untested", False):
-            warn("Support for {0} is untested; please verify results".format(frameid), 
+            warn("Support for {0} is untested; please verify results"
+                 .format(frameid), 
                  UntestedFrameWarning)
         for spec in frame._framespec:
             try:
@@ -206,6 +207,14 @@ class TextFrame(Frame):
                 raise ValueError("Invalid text frame value")
         super().__init__(frameid=frameid, flags=flags, frameno=frameno, **kwargs)
         self.text.extend(list(extract_strs(values)))
+
+    @classmethod
+    def _from_data(cls, frameid, data, flags=None, frameno=None):
+        frame = super()._from_data(frameid, data, flags=flags, frameno=frameno)
+        if len(frame.text) == 0 or sum(len(t) for t in frame.text) == 0:
+            warn("Ignoring empty text frame {0}".format(frameid), EmptyFrameWarning)
+            return None
+        return frame
 
     def _str_fields(self):
         return ", ".join(repr(t) for t in self.text)

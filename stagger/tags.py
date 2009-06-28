@@ -290,14 +290,16 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
             tag._read_header(file)
             for (frameid, bflags, data) in tag._read_frames(file):
                 if len(data) == 0:
-                    warn("Ignoring empty frame {0}".format(frameid), Warning)
+                    warn("Ignoring empty frame {0}".format(frameid), 
+                         EmptyFrameWarning)
                 else:
                     frame = tag._frame_from_data(frameid, bflags, data, i)
-                    l = tag._frames.setdefault(frame.frameid, [])
-                    l.append(frame)
-                    if file.tell() > tag.offset + tag.size:
-                        break
-                    i += 1
+                    if frame is not None:
+                        l = tag._frames.setdefault(frame.frameid, [])
+                        l.append(frame)
+                        if file.tell() > tag.offset + tag.size:
+                            break
+                        i += 1
             return tag
 
     @classmethod
@@ -310,16 +312,21 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
             if flags is None: 
                 flags = set()
             if frameid in self.known_frames:
-                return self.known_frames[frameid]._from_data(frameid, data, flags, frameno=frameno)
+                return self.known_frames[frameid]._from_data(frameid, data, 
+                                                             flags, 
+                                                             frameno=frameno)
             else:
                 # Unknown frame
                 flags.add("unknown")
                 if frameid.startswith('T'): # Unknown text frame
-                    return Frames.TextFrame._from_data(frameid, data, flags, frameno=frameno)
+                    return Frames.TextFrame._from_data(frameid, data, flags, 
+                                                       frameno=frameno)
                 elif frameid.startswith('W'): # Unknown URL frame
-                    return Frames.URLFrame._from_data(frameid, data, flags, frameno=frameno)
+                    return Frames.URLFrame._from_data(frameid, data, flags, 
+                                                      frameno=frameno)
                 else:
-                    return Frames.UnknownFrame._from_data(frameid, data, flags, frameno=frameno)
+                    return Frames.UnknownFrame._from_data(frameid, data, flags, 
+                                                          frameno=frameno)
         except (FrameError, ValueError, EOFError) as e:
             return Frames.ErrorFrame(frameid, data, exception=e, frameno=frameno)
 

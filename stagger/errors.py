@@ -3,6 +3,7 @@
 class Error(Exception): pass
 
 class Warning(Error, UserWarning): pass
+class EmptyFrameWarning(Warning): pass
 class UntestedFrameWarning(Warning): pass
 class BozoFrameWarning(Warning): pass
 
