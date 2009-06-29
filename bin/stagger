@@ -129,11 +129,11 @@ else: # print
                         print(filename + ":warning: " + str(w.message), 
                               file=sys.stderr)
                 sys.stderr.flush()
-                if tag:
-                    for frame in tag.frames():
-                        print("   " + str(frame))
-                    print()
-                sys.stdout.flush()
+            if tag:
+                for frame in tag.frames():
+                    print("   " + str(frame))
+                print()
+            sys.stdout.flush()
 
 if options.stats:
     print_stats()
