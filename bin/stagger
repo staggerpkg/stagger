@@ -6,6 +6,7 @@ import codecs
 import locale
 import warnings
 import os
+import textwrap
 from optparse import OptionParser, OptionGroup
 
 import stagger
@@ -29,7 +30,7 @@ def create_parser():
                       help="List known frame types and exit")
 
     parser.add_option("-f", "--frameid",
-                      action="store_true", dest="low",
+                      action="store_true", dest="frameid",
                       help="Print low-level frame ids instead of descriptive names")
 
     parser.add_option("-q", "--quiet", action="store_true", dest="quiet",
@@ -127,7 +128,31 @@ try:
         stagger.util.set_raw_tag_data(options.load, data, **par)
 
     elif options.list:
-        raise NotImplementedError()
+        def wraplist(strings):
+            return textwrap.fill(", ".join(strings), width=78,
+                                 initial_indent="    ",
+                                 subsequent_indent="    ")
+        def print_frame_list(header, predicate):
+            print(header)
+            frameids = [frameid for (frameid, framecls)
+                        in stagger.tags.Tag.known_frames.items()
+                        if predicate(framecls) ]
+            frameids.sort()
+            print(wraplist(frameids))
+            print()
+        
+        for version in [2, 3, 4]:
+            complement = set((2, 3, 4))
+            complement.remove(version)
+            print_frame_list("ID3v2.{0}-only frame ids:".format(version),
+                             lambda framecls: framecls._in_version(version)
+                             and not framecls._in_version(*complement))
+        print_frame_list("Frame ids in both v2.3 and v2.4:",
+                         lambda framecls: framecls._in_version(3)
+                         and framecls._in_version(4))
+
+        print("Frame names (usable in all versions):")
+        print(wraplist(stagger.tags.Tag._friendly_names))
 
     elif options.delete:
         for filename in args:
@@ -153,21 +178,28 @@ try:
                 tag = None
                 try:
                     tag = stagger.read_tag(filename)
-                    print(filename + ": " + str(tag))
+                    print("{0}: ID3v2.{1} tag with {2} frames"
+                          .format(filename, tag.version, len(tag)))
                     sys.stdout.flush()
                 except stagger.NoTagError:
                     print(filename + ":error: No tag", file=sys.stderr)
                 except stagger.Error as e:
                     print(filename + ":error: " + ", ".join(e.args[0]), 
                           file=sys.stderr)
-                    if not options.quiet and len(ws) > 0:
-                        for w in ws:
-                            print(filename + ":warning: " + str(w.message), 
-                                  file=sys.stderr)
-                    sys.stderr.flush()
+                if not options.quiet and len(ws) > 0:
+                    for w in ws:
+                        print(filename + ":warning: " + str(w.message), 
+                              file=sys.stderr)
+                sys.stderr.flush()
                 if tag:
-                    for frame in tag.frames():
-                        print("   " + str(frame))
+                    if options.frameid:
+                        for frame in tag.frames():
+                            print("   {0}".format(str(frame)))
+                    else:
+                        for name in tag._friendly_names:
+                            val = getattr(tag, name.replace("-", "_"))
+                            if val:
+                                print("{0:>16}: {1}".format(name.title(), val))
                     print()
                 sys.stdout.flush()
 
