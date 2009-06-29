@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# Copyright (c) 2009, Karoly Lorentey  <karoly@lorentey.hu>
+
 import unittest
 
 import test_fileutil
