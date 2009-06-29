@@ -20,58 +20,88 @@ sys.stderr = codecs.getwriter(locale.getpreferredencoding())(sys.stderr.buffer)
 
 versionstr = ".".join((str(v) for v in stagger.version))
 
-parser = OptionParser(usage="%prog [options] file1.mp3 [file2.mp3...]",
-                      version="%prog " + versionstr)
+def create_parser():
+    parser = OptionParser(usage="%prog [command] [options] file1.mp3 [file2.mp3...]",
+                          version="%prog " + versionstr)
 
-parser.add_option("-q", "--quiet", action="store_true", dest="quiet",
-                  help="Suppress warning messages on stderr")
+    # General options
+    parser.add_option("-l", "--list", action="store_true", dest="list",
+                      help="List known frame types and exit")
 
-group = OptionGroup(parser, "Commands")
-group.add_option("-p", "--print", action="store_true", dest="print",
-                 help="(default) Print tags")
-group.add_option("-d", "--delete", action="store_true", dest="delete",
-                  help="Delete tags")
-parser.add_option_group(group)
+    parser.add_option("-f", "--frameid",
+                      action="store_true", dest="low",
+                      help="Print low-level frame ids instead of descriptive names")
 
-group = OptionGroup(parser, "Low-level options")
-group.add_option("-l", "--low", 
-                 action="store_true", dest="low",
-                 help="Print low-level frame ids "
-                 "instead of descriptive names")
+    parser.add_option("-q", "--quiet", action="store_true", dest="quiet",
+                      help="Suppress warning messages on stderr")
 
-group.add_option("--dump",
-                 action="store", dest="dump", metavar="FILE",
-                 help="Dump raw binary tag from FILE to stdout")
+    parser.add_option("-v", "--verbose", action="store_true", dest="verbose",
+                      help="Explain what is being done")
+    parser.add_option("-n", "--no-act", 
+                      action="store_false", dest="act", default=True,
+                      help="Don't actually change any files; implies --verbose.")
 
-group.add_option("--load",
-                 action="store", dest="load", metavar="FILE",
-                 help="Load binary tag dump from stdin and apply to FILE")
+    # Command group
+    group = OptionGroup(parser, "Commands")
+    group.add_option("-p", "--print", action="store_true", dest="print",
+                     help="Print tag contents (default)")
+    group.add_option("-d", "--delete", action="store_true", dest="delete",
+                      help="Delete tags")
 
-group.add_option("--stats",
-                 action="store_true", dest="stats",
-                 help="Print resource usage statistics to stderr before exiting")
+    group.add_option("-s", "--set", action="append", nargs=2, dest="set",
+                     metavar="FRAME VALUE",
+                     help="Set FRAME to VALUE")
 
-parser.add_option_group(group)
+    group.add_option("-r", "--remove", action="append", dest="remove",
+                     metavar="FRAME",
+                     help="Remove all instances of FRAME")
 
+    parser.add_option_group(group)
+
+    # Debug group
+    group = OptionGroup(parser, "Debugging options")
+    group.add_option("--dump",
+                     action="store", dest="dump", metavar="FILE",
+                     help="Dump raw binary tag from FILE to stdout")
+
+    group.add_option("--load",
+                     action="store", dest="load", metavar="FILE",
+                     help="Load binary tag dump from stdin and apply to FILE")
+
+    group.add_option("--stats",
+                     action="store_true", dest="stats",
+                     help="Print resource usage statistics before termination")
+    parser.add_option_group(group)
+
+    return parser
+
+parser = create_parser()
 (options, args) = parser.parse_args()
 
-def dump_tag(filename):
-    with open(filename, "rb") as file:
-        try:
-            (cls, offset, length) = stagger.tags.detect_tag(file)
-        except stagger.NoTagError:
-            return bytes()
-        file.seek(offset)
-        return file.read(length)
+if not options.act:
+    options.verbose = True
 
-def load_tag(filename, data):
-    with open(filename, "rb+") as file:
-        try:
-            (cls, offset, length) = stagger.tags.detect_tag(file)
-        except stagger.NoTagError:
-            (offset, length) = (0, 0)
-        stagger.fileutil.replace_chunk(file, offset, length, data)
-    
+
+def check_cmds(parser, options):
+    cmds = ("dump", "load", "delete", "print", "list", ("set", "remove"))
+    num = 0
+    for cmd in cmds:
+        if isinstance(cmd, tuple):
+            if any(getattr(options, c, False) for c in cmd):
+                num += 1
+        elif getattr(options, cmd, False):
+            num += 1
+    if num > 1:
+        parser.error("conflicting commands")
+                
+check_cmds(parser, options)
+
+def verbose(*args, **kwargs):
+    if options.verbose:
+        print(*args, **kwargs)
+
+par = { "act": options.act, "verbose": options.verbose }
+
 def print_stats():
     try:
         statfile = open("/proc/" + str(os.getpid()) + "/status", "r")
@@ -91,49 +121,65 @@ def print_stats():
     except (ImportError, AttributeError, ValueError):
         pass # Give up
 
-if options.dump:
-    if len(args) != 1:
-        parser.error("--dump requires a single file argument")
-        exit(1)
-    sys.stdout.stream.write(dump_tag(args[0]))
+try:
+    if options.dump:
+        sys.stdout.stream.write(stagger.util.get_raw_tag_data(options.dump))
 
-elif options.load:
-    if len(args) != 1:
-        parser.error("--load requires a single file argument")
-        exit(1)
-    data = sys.stdin.buffer.read()
-    if not data.startswith(b"ID3"):
-        parser.error("invalid tag data")
-        exit(1)
-    load_tag(args[0], data)
+    elif options.load:
+        data = sys.stdin.buffer.read()
+        if not data.startswith(b"ID3"):
+            parser.error("invalid tag data")
+            exit(1)
+        stagger.util.set_raw_tag_data(options.load, data, **par)
 
-elif options.delete:
-    for filename in args:
-        stagger.delete_tag(filename)
+    elif options.list:
+        raise NotImplementedError()
 
-else: # print
-    for filename in args:
-        with warnings.catch_warnings(record=True) as ws:
-            tag = None
+    elif options.delete:
+        for filename in args:
+            if options.act:
+                stagger.delete_tag(filename)
+            verbose("{0}: tag deleted".format(filename))
+
+    elif options.set:
+        for filename in args:
             try:
-                tag = stagger.read_tag(filename)
-                print(filename + ": " + str(tag))
+                stagger.util.set_frames(filename, dict(options.set), **par)
+            except KeyError as e:
+                print(e.args[0], file=sys.stderr)
+                exit(1)
+
+    elif options.remove:
+        for filename in args:
+            stagger.util.remove_frames(filename, options.remove, **par)
+
+    else: # print
+        for filename in args:
+            with warnings.catch_warnings(record=True) as ws:
+                tag = None
+                try:
+                    tag = stagger.read_tag(filename)
+                    print(filename + ": " + str(tag))
+                    sys.stdout.flush()
+                except stagger.NoTagError:
+                    print(filename + ":error: No tag", file=sys.stderr)
+                except stagger.Error as e:
+                    print(filename + ":error: " + ", ".join(e.args[0]), 
+                          file=sys.stderr)
+                    if not options.quiet and len(ws) > 0:
+                        for w in ws:
+                            print(filename + ":warning: " + str(w.message), 
+                                  file=sys.stderr)
+                    sys.stderr.flush()
+                if tag:
+                    for frame in tag.frames():
+                        print("   " + str(frame))
+                    print()
                 sys.stdout.flush()
-            except stagger.NoTagError:
-                print(filename + ":error: No tag", file=sys.stderr)
-            except stagger.Error as e:
-                print(filename + ":error: " + ", ".join(e.args[0]), 
-                      file=sys.stderr)
-                if not options.quiet and len(ws) > 0:
-                    for w in ws:
-                        print(filename + ":warning: " + str(w.message), 
-                              file=sys.stderr)
-                sys.stderr.flush()
-            if tag:
-                for frame in tag.frames():
-                    print("   " + str(frame))
-                print()
-            sys.stdout.flush()
+
+except IOError as e:
+    print("{0}: {1}".format(e.filename, e.strerror), file=sys.stderr)
+    exit(1)
 
 if options.stats:
     print_stats()
