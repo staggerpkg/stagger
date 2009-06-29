@@ -83,17 +83,11 @@ if not options.act:
 
 
 def check_cmds(parser, options):
-    cmds = ("dump", "load", "delete", "print", "list", ("set", "remove"))
-    num = 0
-    for cmd in cmds:
-        if isinstance(cmd, tuple):
-            if any(getattr(options, c, False) for c in cmd):
-                num += 1
-        elif getattr(options, cmd, False):
-            num += 1
+    cmds = ("dump", "load", "delete", "print", "list", "set", "remove")
+    num = sum(1 for cmd in cmds if getattr(options, cmd, False))
     if num > 1:
         parser.error("conflicting commands")
-                
+
 check_cmds(parser, options)
 
 def verbose(*args, **kwargs):
