@@ -75,7 +75,7 @@ def load_tag(filename, data):
 def print_stats():
     try:
         statfile = open("/proc/" + str(os.getpid()) + "/status", "r")
-        print(statfile.read())
+        print(statfile.read(), file=sys.stderr)
     except IOError:
         try:
             import resource
