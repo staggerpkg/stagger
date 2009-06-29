@@ -5,6 +5,7 @@ import sys
 import codecs
 import locale
 import warnings
+import os
 from optparse import OptionParser, OptionGroup
 
 import stagger
@@ -73,17 +74,21 @@ def load_tag(filename, data):
     
 def print_stats():
     try:
-        import resource
-        usage = resource.getrusage(resource.RUSAGE_SELF)
-        print("utime={0}".format(usage.ru_utime), file=sys.stderr)
-        print("stime={0}".format(usage.ru_stime), file=sys.stderr)
-        print("maxrss={0}".format(usage.ru_maxrss), file=sys.stderr)
-        print("ixrss={0}".format(usage.ru_ixrss), file=sys.stderr)
-        print("page_faults={0}".format(usage.ru_majflt), file=sys.stderr)
-        print("block_input={0}".format(usage.ru_inblock), file=sys.stderr)
-        print("block_output={0}".format(usage.ru_oublock), file=sys.stderr)
-    except (ImportError, AttributeError, ValueError):
-        pass
+        statfile = open("/proc/" + str(os.getpid()) + "/status", "r")
+        print(statfile.read())
+    except IOError:
+        try:
+            import resource
+            usage = resource.getrusage(resource.RUSAGE_SELF)
+            print("utime={0}".format(usage.ru_utime), file=sys.stderr)
+            print("stime={0}".format(usage.ru_stime), file=sys.stderr)
+            print("maxrss={0}".format(usage.ru_maxrss), file=sys.stderr)
+            print("ixrss={0}".format(usage.ru_ixrss), file=sys.stderr)
+            print("page_faults={0}".format(usage.ru_majflt), file=sys.stderr)
+            print("block_input={0}".format(usage.ru_inblock), file=sys.stderr)
+            print("block_output={0}".format(usage.ru_oublock), file=sys.stderr)
+        except (ImportError, AttributeError, ValueError):
+            pass # Give up
 
 if options.dump:
     if len(args) != 1:
