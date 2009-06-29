@@ -52,10 +52,16 @@ def set_frames(filename, valuedict, act=True, verbose=False):
         verb(verbose, "{0}: new ID3v2.{1} tag"
              .format(filename, stagger.default_tag.version))
         tag = stagger.default_tag()
-    for (frameid, value) in valuedict.items():
-        tag[frameid] = value
-        verb(verbose, "{0}: {1}: set to {2}"
-             .format(filename, frameid, str(tag[frameid])))
+    for (key, value) in valuedict.items():
+        if key.lower() in tag._friendly_names:
+            # Use friendly name API
+            setattr(tag, key.lower(), value)
+            newval = repr(getattr(tag, key.lower()))
+        else:
+            # Use frameid API
+            tag[key] = value
+            newval = tag[key]
+        verb(verbose, "{0}: {1}: set to {2}".format(filename, key, newval))
     if act:
         tag.write(filename)
 

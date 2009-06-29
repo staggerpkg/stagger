@@ -88,7 +88,8 @@ class TagTestCase(unittest.TestCase):
         tag = stagger.read_tag(testfile)
         self.assertEqual(len(tag), 5) 
         self.assertEqual(set(tag.keys()), set(frame.frameid for frame in framelist))
-        self.assertEqual([frame.frameid for frame in tag.frames()], [frame.frameid for frame in framelist])
+        self.assertEqual([frame.frameid for frame in tag.frames(orig_order=True)], 
+                         [frame.frameid for frame in framelist])
 
         # Test frame contents
         for framecls in framelist:
@@ -116,7 +117,8 @@ class TagTestCase(unittest.TestCase):
         self.assertEqual(len(tagdata), len(filedata))
         self.assertFalse(tagdata == filedata)
 
-        # Override the sort order with an empty list, verify resulting order is the same as in the original file.
+        # Override the sort order with an empty list, 
+        # verify resulting order is the same as in the original file.
 
         tag.frame_order = stagger.tags.FrameOrder()
         tagdata = tag.encode()
@@ -129,5 +131,3 @@ suite = unittest.TestLoader().loadTestsFromTestCase(TagTestCase)
 
 if __name__ == "__main__":
     unittest.main(defaultTest="suite")
-
-

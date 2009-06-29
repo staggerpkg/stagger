@@ -6,7 +6,7 @@ import re
 import collections
 import io
 
-from abc import abstractmethod
+from abc import abstractmethod, abstractproperty
 from warnings import warn
 from contextlib import contextmanager
 
@@ -195,9 +195,9 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     def __init__(self):
         self.flags = set()
         self._frames = dict()
+        self._filename = None
 
-
-    # MutableMapping methods
+    # MutableMapping API
     def __iter__(self):
         for frameid in self._frames:
             yield frameid
@@ -251,25 +251,71 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     def __delitem__(self, key):
         del self._frames[self._normalize_key(key)]
     
-    def frames(self):
-        """Returns a list of frames in this tag, sorted by the order they appeared in the original file.
-        Frames that did not originate from any file are returned at the end of the list, in
-        undefined order.
+    def values(self):
+        for frameid in self._frames.keys():
+            for frame in self._frames[frameid]:
+                yield frame
+
+    # Friendly names API
+    _friendly_names = [ "title", "artist", 
+                        # "date", 
+                        "album-artist", "album", 
+                        # "track", "track-total",
+                        # "disk", "disk-total",
+                        "grouping", "composer", 
+                        "genre", 
+                        # "comment", "compilation"
+                        # "picture"
+                        # "sort-title", "sort-artist",
+                        # "sort-album-artist", "sort-album",
+                        # "sort-composer",
+                        ]
+
+    title = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
+    artist = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
+    album_artist = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
+    album = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
+    composer = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
+    genre = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
+    grouping = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
+
+    @classmethod
+    def _friendly_text_getter(cls, frameid):
+        def getter(self):
+            try:
+                frame = self[frameid]
+            except KeyError:
+                return ""
+            else:
+                return " / ".join(frame.text)
+        return getter
+
+    @classmethod
+    def _friendly_text_setter(cls, frameid):
+        def setter(self, value):
+            if isinstance(value, str):
+                self[frameid] = value.split(" / ")
+            else:
+                self[frameid] = value
+        return setter
+    
+    # Misc
+    def frames(self, orig_order=False):
+        """Returns a list of frames in this tag, sorted according to frame_order.
         """
         frames = []
         for frameid in self._frames.keys():
             for frame in self._frames[frameid]:
                 frames.append(frame)
-        frames.sort(key=lambda frame: 
-                    (0, frame.frameno) 
-                    if frame.frameno is not None 
-                    else (1,))
+        if orig_order:
+            key = (lambda frame: 
+                   (0, frame.frameno) 
+                   if frame.frameno is not None 
+                   else (1,))
+        else:
+            key = self.frame_order.key
+        frames.sort(key=key)
         return frames
-
-    def values(self):
-        for frameid in self._frames.keys():
-            for frame in self._frames[frameid]:
-                yield frame
 
     def __repr__(self):
         return "<{0}: ID3v2.{1} tag{2} with {3} frames>".format(
@@ -278,7 +324,8 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
             ("({0})".format(", ".join(self.flags)) 
              if len(self.flags) > 0 else ""),
             len(self._frames))
-    
+
+
     # Reading tags
     @classmethod
     def read(cls, filename, offset=0):
@@ -300,6 +347,10 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
                         if file.tell() > tag.offset + tag.size:
                             break
                         i += 1
+            try:
+                tag._filename = file.name
+            except AttributeError:
+                pass
             return tag
 
     @classmethod
@@ -345,7 +396,11 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
 
     # Writing tags
 
-    def write(self, filename):
+    def write(self, filename=None):
+        if not filename:
+            filename = self._filename
+        if not filename:
+            raise TypeError("invalid file: {0}".format(filename))
         with fileutil.opened(filename, "rb+") as file:
             try:
                 (offset, length) = detect_tag(file)[1:3]
@@ -432,10 +487,33 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
         return newframes
 
 
+        
 class Tag22(Tag):
     version = 2
+
     def __init__(self):
         super().__init__()
+
+    title = property(Tag._friendly_text_getter("TT2"), 
+                     Tag._friendly_text_setter("TT2"))
+    artist = property(Tag._friendly_text_getter("TP1"), 
+                      Tag._friendly_text_setter("TP1"))
+    album_artist = property(Tag._friendly_text_getter("TP2"), 
+                            Tag._friendly_text_setter("TP2"))
+    album = property(Tag._friendly_text_getter("TAL"), 
+                     Tag._friendly_text_setter("TAL"))
+    # TODO: track / track-total
+    # TODO: disk / disk-total
+    composer = property(Tag._friendly_text_getter("TCM"), 
+                        Tag._friendly_text_setter("TCM"))
+    genre = property(Tag._friendly_text_getter("TCO"), 
+                     Tag._friendly_text_setter("TCO"))
+    # TODO: date
+    # TODO: picture
+    grouping = property(Tag._friendly_text_getter("TT1"), 
+                        Tag._friendly_text_setter("TT1"))
+    # TODO: compilation
+    # TODO: comment
 
     def _read_header(self, file):
         self.offset = file.tell()
@@ -504,8 +582,30 @@ class Tag22(Tag):
 
 class Tag23(Tag):
     version = 3
+
     def __init__(self):
         super().__init__()
+
+    title = property(Tag._friendly_text_getter("TIT2"), 
+                     Tag._friendly_text_setter("TIT2"))
+    artist = property(Tag._friendly_text_getter("TPE1"), 
+                      Tag._friendly_text_setter("TPE1"))
+    album_artist = property(Tag._friendly_text_getter("TPE2"), 
+                            Tag._friendly_text_setter("TPE2"))
+    album = property(Tag._friendly_text_getter("TALB"), 
+                     Tag._friendly_text_setter("TALB"))
+    # TODO: track / track-total
+    # TODO: disk / disk-total
+    composer = property(Tag._friendly_text_getter("TCOM"), 
+                        Tag._friendly_text_setter("TCOM"))
+    genre = property(Tag._friendly_text_getter("TCON"), 
+                     Tag._friendly_text_setter("TCON"))
+    # TODO: date
+    # TODO: picture
+    grouping = property(Tag._friendly_text_getter("TIT1"), 
+                        Tag._friendly_text_setter("TIT1"))
+    # TODO: compilation
+    # TODO: comment
 
     def _read_header(self, file):
         self.offset = file.tell()
@@ -643,8 +743,30 @@ class Tag24(Tag):
     ITUNES_WORKAROUND = False
 
     version = 4
+
     def __init__(self):
         super().__init__()
+
+    title = property(Tag._friendly_text_getter("TIT2"), 
+                     Tag._friendly_text_setter("TIT2"))
+    artist = property(Tag._friendly_text_getter("TPE1"), 
+                      Tag._friendly_text_setter("TPE1"))
+    album = property(Tag._friendly_text_getter("TALB"), 
+                     Tag._friendly_text_setter("TALB"))
+    album_artist = property(Tag._friendly_text_getter("TPE2"), 
+                            Tag._friendly_text_setter("TPE2"))
+    # TODO: track / track-total
+    # TODO: disk / disk-total
+    composer = property(Tag._friendly_text_getter("TCOM"), 
+                        Tag._friendly_text_setter("TCOM"))
+    genre = property(Tag._friendly_text_getter("TCON"), 
+                     Tag._friendly_text_setter("TCON"))
+    # TODO: date
+    # TODO: picture
+    grouping = property(Tag._friendly_text_getter("TIT1"), 
+                        Tag._friendly_text_setter("TIT1"))
+    # TODO: compilation
+    # TODO: comment
 
     def _read_header(self, file):
         self.offset = file.tell()
