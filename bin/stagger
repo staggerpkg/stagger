@@ -206,6 +206,8 @@ try:
 except IOError as e:
     print("{0}: {1}".format(e.filename, e.strerror), file=sys.stderr)
     exit(1)
+except KeyboardInterrupt:
+    exit(1)
 
 if options.stats:
     print_stats()
