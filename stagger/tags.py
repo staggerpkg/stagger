@@ -442,47 +442,35 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
         pattern = re.compile(b"^[A-Z][A-Z0-9]{2}[A-Z0-9 ]?$")
         return pattern.match(data)
 
-    def _prepare_framedict(self, framedict):
+    def _prepare_frames_hook(self):
         pass
 
-    def _prepare_frames(self, frames):
+    def _prepare_frames(self):
         # Generate dictionary of frames
-        d = dict()
-        for frame in frames:
-            l = d.get(frame.frameid, [])
-            l.append(frame)
-            d[frame.frameid] = l
+        d = self._frames
 
         # Merge duplicate frames
-        for frameid in d.keys():
-            l = d[frameid]
-            if len(l) > 1:
-                d[frameid] = l[0]._merge(l)
+        for frameid in self._frames.keys():
+            fs = self._frames[frameid]
+            if len(fs) > 1:
+                d[frameid] = fs[0]._merge(fs)
 
-        self._prepare_framedict(d)
+        self._prepare_frames_hook()
 
         # Convert frames
-        d2 = dict()
-        for frameid in d.keys():
-            fs = []
-            try:
-                for frame in d[frameid]:
-                    fs.append(frame._to_version(self.version))
-            except IncompatibleFrameError:
-                warn("{0}: Ignoring incompatible frame".format(frameid), 
-                     FrameWarning)
-            except ValueError as e:
-                warn("{0}: Ignoring invalid frame ({1})".format(frameid, e), 
-                     FrameWarning)
-            else:
-                d2[frameid] = fs
+        newframes = []
+        for frameid in self._frames.keys():
+            for frame in self._frames[frameid]:
+                try:
+                    newframes.append(frame._to_version(self.version))
+                except IncompatibleFrameError:
+                    warn("{0}: Ignoring incompatible frame".format(frameid), 
+                         FrameWarning)
+                except ValueError as e:
+                    warn("{0}: Ignoring invalid frame ({1})".format(frameid, e), 
+                         FrameWarning)
 
         # Sort frames
-        newframes = []
-        for fs in d2.values():
-            for f in fs:
-                assert isinstance(f, Frames.Frame)
-                newframes.append(f)
         newframes.sort(key=self.frame_order.key)
         return newframes
 
@@ -561,8 +549,18 @@ class Tag22(Tag):
         data.extend(framedata)
         return data
 
+    def _prepare_frames_hook(self):
+        for frameid in self._frames.keys():
+            for frame in self._frames[frameid]:
+                if isinstance(frame, Frames.TextFrame):
+                    # ID3v2.2 doesn't support multiple text values
+                    if len(frame.text) > 1:
+                        warn("{0}: merged multiple text strings into one value"
+                             .format(frame.frameid), FrameWarning)
+                        frame.text = [" / ".join(frame.text)]
+
     def encode(self, size_hint=None):
-        frames = self._prepare_frames(self.values())
+        frames = self._prepare_frames()
         framedata = bytearray().join(self.__encode_one_frame(frame)
                                      for frame in frames)
         if "unsynchronised" in self.flags:
@@ -719,7 +717,7 @@ class Tag23(Tag):
         return data
 
     def encode(self, size_hint=None):
-        frames = self._prepare_frames(self.values())
+        frames = self._prepare_frames()
         framedata = bytearray().join(self.__encode_one_frame(frame)
                                      for frame in frames)
         if "unsynchronised" in self.flags:
@@ -845,7 +843,7 @@ class Tag24(Tag):
         flags = set()
         # Frame format flags
         if bflags & _FRAME24_FORMAT_UNKNOWN_MASK:
-            raise FrameError("Unknown ID3v2.4 frame encoding flags: 0x{0:X}".format(b))
+            raise FrameError("{0}: Unknown frame encoding flags: 0x{1:X}".format(frameid, b))
         if bflags & _FRAME24_FORMAT_GROUP:
             flags.add("group")
             flags.add("group={0}".format(data[0])) # hack
@@ -853,7 +851,7 @@ class Tag24(Tag):
         if bflags & _FRAME24_FORMAT_COMPRESSED:
             flags.add("compressed")
         if bflags & _FRAME24_FORMAT_ENCRYPTED:
-            raise FrameError("Can't read ID3v2.4 encrypted frames")
+            raise FrameError("{0}: Can't read encrypted frames".format(frameid))
         if bflags & _FRAME24_FORMAT_UNSYNCHRONISED:
             flags.add("unsynchronised")
         expanded_size = len(data)
@@ -873,9 +871,8 @@ class Tag24(Tag):
         if bflags & _FRAME24_STATUS_READ_ONLY:
             flags.add("read_only")
         if bflags & _FRAME24_STATUS_UNKNOWN_MASK:
-            warn("Unexpected status flags on {0} frame: 0x{1:X}"
-                 .format(frameid, b), 
-                 TagWarning)
+            warn("{0}: Unexpected status flags: 0x{1:X}"
+                 .format(frameid, b), FrameWarning)
         return flags, data
 
     def __encode_one_frame(self, frame):
@@ -913,7 +910,7 @@ class Tag24(Tag):
         data = bytearray()
         # Frame id
         if len(frame.frameid) != 4 or not self._is_frame_id(frame.frameid):
-            raise "Invalid ID3v2.4 frame id {0}".format(repr(frame.frameid))
+            raise "{0}: Invalid frame id".format(repr(frame.frameid))
         data.extend(frame.frameid.encode("ASCII"))
         # Size
         data.extend(Syncsafe.encode(len(frameinfo) + len(framedata), width=4))
@@ -927,7 +924,7 @@ class Tag24(Tag):
         return data
 
     def encode(self, size_hint=None):
-        frames = self._prepare_frames(self.values())
+        frames = self._prepare_frames()
         if "unsynchronised" in self.flags:
             for frame in frames: 
                 frame.flags.add("unsynchronised")
