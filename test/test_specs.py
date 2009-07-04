@@ -320,7 +320,8 @@ class SpecTestCase(unittest.TestCase):
         self.assertEqual(spec.validate(frame, "UTF-8"), 3)
         self.assertRaises(ValueError, spec.validate, frame, -1)
         self.assertRaises(ValueError, spec.validate, frame, 4)
-        self.assertRaises(TypeError, spec.validate, frame, "foobar")
+        self.assertRaises(ValueError, spec.validate, frame, "foobar")
+        self.assertRaises(TypeError, spec.validate, frame, 1.5)
 
     def testEncodedStringSpec(self):
         frame = TextFrame(frameid="TEST", encoding=3)

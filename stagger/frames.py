@@ -42,7 +42,7 @@ class Frame(metaclass=abc.ABCMeta):
                         for spec in self._framespec))
 
     @classmethod
-    def _from_data(cls, frameid, data, flags=None, frameno=None):
+    def _decode(cls, frameid, data, flags=None, frameno=None):
         frame = cls(frameid=frameid, flags=flags, frameno=frameno)
         if getattr(frame, "_untested", False):
             warn("{0}: Untested frame; please verify results".format(frameid),
@@ -98,7 +98,7 @@ class Frame(metaclass=abc.ABCMeta):
         raise IncompatibleFrameError("Frame {0} cannot be converted "
                                      "to ID3v2.{1} format".format(self.frameid, version))
 
-    def _to_data(self):
+    def _encode(self, encodings=("latin-1", "utf-16")):
         if getattr(self, "_bozo", False):
             warn("{0}: Frame type is not widely implemented, "
                  "its use is discouraged".format(self.frameid), 
@@ -115,7 +115,7 @@ class Frame(metaclass=abc.ABCMeta):
         def try_preferred_encodings():
             orig_encoding = self.encoding
             try:
-                for encoding in EncodedStringSpec.preferred_encodings:
+                for encoding in encodings:
                     try:
                         self.encoding = encoding
                         return encode_fields()
@@ -124,14 +124,15 @@ class Frame(metaclass=abc.ABCMeta):
             finally:
                 self.encoding = orig_encoding
             raise ValueError("Could not encode strings")
-        
+
         if not isinstance(self._framespec[0], EncodingSpec):
             return encode_fields()
         elif self.encoding is None:
             return try_preferred_encodings()
         else:
             try:
-                return encode_fields()
+                # Try specified encoding before others
+               return encode_fields()
             except UnicodeEncodeError:
                 return try_preferred_encodings()
 
@@ -211,8 +212,8 @@ class TextFrame(Frame):
         self.text.extend(list(extract_strs(values)))
 
     @classmethod
-    def _from_data(cls, frameid, data, flags=None, frameno=None):
-        frame = super()._from_data(frameid, data, flags=flags, frameno=frameno)
+    def _decode(cls, frameid, data, flags=None, frameno=None):
+        frame = super()._decode(frameid, data, flags=flags, frameno=frameno)
         if len(frame.text) == 0 or sum(len(t) for t in frame.text) == 0:
             warn("{0}: Ignoring empty text frame".format(frameid), 
                  EmptyFrameWarning)
