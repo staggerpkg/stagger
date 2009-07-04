@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # Copyright (c) 2009, Karoly Lorentey  <karoly@lorentey.hu>
 
 import unittest
@@ -54,7 +55,11 @@ def generate_test(file):
     return test
 
 class SamplesTestCase(unittest.TestCase):
-    pass
+    def tearDown(self):
+        # Clean warning registries, allowing warnings to be recorded again.
+        for module in stagger.tags, stagger.frames, stagger.id3, stagger.specs:
+            if hasattr(module, "__warningregistry__"):
+                del module.__warningregistry__
 
 sample_dir = os.path.join(os.path.dirname(__file__), "samples")
 
@@ -65,5 +70,6 @@ for file in list_id3(sample_dir):
 suite = unittest.TestLoader().loadTestsFromTestCase(SamplesTestCase)
 
 if __name__ == "__main__":
+    warnings.simplefilter("always", stagger.Warning)
     unittest.main(defaultTest="suite")
 

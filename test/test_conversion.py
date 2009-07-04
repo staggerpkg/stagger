@@ -1,8 +1,10 @@
+#!/usr/bin/env python3
 # Copyright (c) 2009, Karoly Lorentey  <karoly@lorentey.hu>
 
 import unittest
 import random
 import io
+import warnings
 
 from stagger.errors import *
 from stagger.conversion import *
@@ -93,4 +95,5 @@ class ConversionTestCase(unittest.TestCase):
 suite = unittest.TestLoader().loadTestsFromTestCase(ConversionTestCase)
 
 if __name__ == "__main__":
+    warnings.simplefilter("always", stagger.Warning)
     unittest.main(defaultTest="suite")
