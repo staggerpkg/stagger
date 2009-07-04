@@ -214,6 +214,13 @@ class TextFrame(Frame):
     @classmethod
     def _decode(cls, frameid, data, flags=None, frameno=None):
         frame = super()._decode(frameid, data, flags=flags, frameno=frameno)
+        count = 0
+        while len(frame.text) > 0 and frame.text[-1] == "":
+            frame.text = frame.text[0:-1]
+            count += 1
+        if count > 0:
+            warn("{0}: Stripped {1} empty strings from end of frame"
+                 .format(frameid, count), FrameWarning)
         if len(frame.text) == 0 or sum(len(t) for t in frame.text) == 0:
             warn("{0}: Ignoring empty text frame".format(frameid), 
                  EmptyFrameWarning)

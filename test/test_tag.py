@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # Copyright (c) 2009, Karoly Lorentey  <karoly@lorentey.hu>
 
 import unittest
@@ -199,7 +200,21 @@ class TagTestCase(unittest.TestCase):
             # (i.e., no tag header or padding).
             self.assertEqual(len(tag.encode()), 0)
 
+    def testEmptyStrings(self):
+        # 24.stagger.empty-strings.id3 consists of a TIT2 frame with 13 extra
+        # NUL characters at the end.
+        testfile = os.path.join(os.path.dirname(__file__), "samples", 
+                                "24.stagger.empty-strings.id3")
+        with warnings.catch_warnings(record=True) as ws:
+            tag = stagger.read_tag(testfile)
+            self.assertEqual(tag[TIT2].text, ["Foobar"])
+            self.assertEqual(len(ws), 1)
+            self.assertEqual(ws[0].category, stagger.FrameWarning)    
+            self.assertEqual(ws[0].message.args, ("TIT2: Stripped 13 empty strings "
+                             "from end of frame",))
+
 suite = unittest.TestLoader().loadTestsFromTestCase(TagTestCase)
 
 if __name__ == "__main__":
+    warnings.simplefilter("always", stagger.Warning)
     unittest.main(defaultTest="suite")
