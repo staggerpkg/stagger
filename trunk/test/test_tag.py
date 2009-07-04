@@ -77,7 +77,9 @@ class TagTestCase(unittest.TestCase):
             self.assertEqual(len(data_default_smallhint), length + 250)
 
     def testFrameEncoding(self):
-        for tagcls, frm in (stagger.Tag22, TT2), (stagger.Tag23, TIT2), (stagger.Tag24, TIT2):
+        for tagcls, frm in ((stagger.Tag22, TT2), 
+                            (stagger.Tag23, TIT2), 
+                            (stagger.Tag24, TIT2)):
             tag = tagcls()
             value = frm.frameid.lower()
             tag[frm] = value
@@ -118,7 +120,8 @@ class TagTestCase(unittest.TestCase):
         #
         # TIT2("TIT2"), TPE1("TPE1"), TALB("TALB"), TRCK("TRCK"), TPE2("TPE2")
         
-        testfile = os.path.join(os.path.dirname(__file__), "samples", "24.stagger.sample-01.id3")
+        testfile = os.path.join(os.path.dirname(__file__), "samples", 
+                                "24.stagger.sample-01.id3")
         framelist = [TRCK, TPE2, TALB, TIT2, TPE1]
 
         # Read tag, verify frame ordering is preserved
@@ -176,7 +179,7 @@ class TagTestCase(unittest.TestCase):
             self.assertEqual(len(dtag[TIT2].text), 3)
             self.assertEqual(dtag[TIT2].text, tag[TIT2].text)
 
-        # Version 2.2 has no such support, stagger merges multiple strings
+        # Version 2.2 has no such support, so stagger merges multiple strings.
         tag = stagger.Tag22()
         tag.padding_max = 0
         tag[TT2] = ("Foo", "Bar", "Baz")
