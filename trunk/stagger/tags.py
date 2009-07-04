@@ -340,7 +340,7 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
                     warn("{0}: Ignoring empty frame".format(frameid), 
                          EmptyFrameWarning)
                 else:
-                    frame = tag._frame_from_data(frameid, bflags, data, i)
+                    frame = tag._decode_frame(frameid, bflags, data, i)
                     if frame is not None:
                         l = tag._frames.setdefault(frame.frameid, [])
                         l.append(frame)
@@ -357,29 +357,29 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     def decode(cls, data):
         return cls.read(io.BytesIO(data))
 
-    def _frame_from_data(self, frameid, bflags, data, frameno=None):
+    def _decode_frame(self, frameid, bflags, data, frameno=None):
         try:
             (flags, data) = self._interpret_frame_flags(bflags, data)
             if flags is None: 
                 flags = set()
             if frameid in self.known_frames:
-                return self.known_frames[frameid]._from_data(frameid, data, 
-                                                             flags, 
-                                                             frameno=frameno)
+                return self.known_frames[frameid]._decode(frameid, data, 
+                                                          flags, 
+                                                          frameno=frameno)
             else:
                 # Unknown frame
                 flags.add("unknown")
                 warn("{0}: Unknown frame".format(frameid), 
                      UnknownFrameWarning)
                 if frameid.startswith('T'): # Unknown text frame
-                    return Frames.TextFrame._from_data(frameid, data, flags, 
-                                                       frameno=frameno)
+                    return Frames.TextFrame._decode(frameid, data, flags, 
+                                                    frameno=frameno)
                 elif frameid.startswith('W'): # Unknown URL frame
-                    return Frames.URLFrame._from_data(frameid, data, flags, 
-                                                      frameno=frameno)
+                    return Frames.URLFrame._decode(frameid, data, flags, 
+                                                   frameno=frameno)
                 else:
-                    return Frames.UnknownFrame._from_data(frameid, data, flags, 
-                                                          frameno=frameno)
+                    return Frames.UnknownFrame._decode(frameid, data, flags, 
+                                                       frameno=frameno)
         except (FrameError, ValueError, EOFError) as e:
             warn("{0}: Invalid frame".format(frameid), ErrorFrameWarning)
             return Frames.ErrorFrame(frameid, data, exception=e, frameno=frameno)
@@ -490,6 +490,7 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
         
 class Tag22(Tag):
     version = 2
+    encodings = ("latin-1", "utf-16")
 
     def __init__(self):
         super().__init__()
@@ -547,7 +548,7 @@ class Tag22(Tag):
         return (None, data)
 
     def __encode_one_frame(self, frame):
-        framedata = frame._to_data()
+        framedata = frame._encode(encodings=self.encodings)
 
         data = bytearray()
         # Frame id
@@ -582,6 +583,7 @@ class Tag22(Tag):
 
 class Tag23(Tag):
     version = 3
+    encodings = ("latin-1", "utf-16")
 
     def __init__(self):
         super().__init__()
@@ -677,7 +679,7 @@ class Tag23(Tag):
         return flags, data
 
     def __encode_one_frame(self, frame):
-        framedata = frame._to_data()
+        framedata = frame._encode(encodings=self.encodings)
         origlen = len(framedata)
 
         flagval = 0
@@ -743,6 +745,7 @@ class Tag24(Tag):
     ITUNES_WORKAROUND = False
 
     version = 4
+    encodings = ("latin-1", "utf-8")
 
     def __init__(self):
         super().__init__()
@@ -876,7 +879,7 @@ class Tag24(Tag):
         return flags, data
 
     def __encode_one_frame(self, frame):
-        framedata = frame._to_data()
+        framedata = frame._encode(encodings=self.encodings)
         origlen = len(framedata)
 
         flagval = 0

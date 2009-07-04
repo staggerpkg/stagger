@@ -273,6 +273,8 @@ class EncodingSpec(ByteSpec):
                 if norm(EncodedStringSpec._encodings[i][0]) == norm(value):
                     value = i
                     break
+            else:
+                raise ValueError("Unknown encoding: " + repr(value))
         if not isinstance(value, int):
             raise TypeError("Not an encoding")
         if 0 <= value <= 3:
@@ -286,7 +288,6 @@ class EncodedStringSpec(Spec):
                   ('utf-16', b"\x00\x00"),
                   ('utf-16-be', b"\x00\x00"),
                   ('utf-8', b"\x00"))
-    preferred_encodings = (0, 1)
 
     def read(self, frame, data):
         enc, term = self._encodings[frame.encoding]

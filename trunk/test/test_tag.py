@@ -41,7 +41,7 @@ class TagTestCase(unittest.TestCase):
     def testPadding(self):
         for tagcls, frames in ((stagger.Tag22, (TT2, TP1)), 
                                (stagger.Tag23, (TIT2, TPE1)), 
-                               (stagger.Tag23, (TIT2, TPE1))):
+                               (stagger.Tag24, (TIT2, TPE1))):
             # Create a simple tag
             tag = tagcls()
             for frame in frames:
@@ -75,6 +75,42 @@ class TagTestCase(unittest.TestCase):
             self.assertEqual(len(data_default_largehint), length + 250)
             self.assertEqual(len(data_default_smallhint), length + 250)
 
+    def testFrameEncoding(self):
+        for tagcls, frm in (stagger.Tag22, TT2), (stagger.Tag23, TIT2), (stagger.Tag24, TIT2):
+            tag = tagcls()
+            value = frm.frameid.lower()
+            tag[frm] = value
+            tag.padding_max = 0
+            
+            # By default, tag should use Latin-1 to encode value (it contains only ASCII).
+            data = tag.encode()
+            self.assertNotEqual(data.find(value.encode("latin-1") + b"\x00"), -1)
+
+            # Now override encoding, see that frame is encoded accordingly.
+            old_encodings = tag.encodings
+            tag.encodings = ("utf-16",)
+            data = tag.encode()
+            self.assertEqual(data.find(value.encode("latin-1") + b"\x00"), -1)
+            self.assertNotEqual(data.find(value.encode("utf-16") + b"\x00\x00"), -1)
+            tag.encodings = old_encodings
+            
+            # Now change value to contain non-Latin-1 chars
+            value = "Lőrentey Károly"
+            tag[frm] = value
+            data = tag.encode()
+            if tagcls is stagger.Tag24: 
+                # Stagger falls back to utf-8 for 2.4 frames.
+                self.assertNotEqual(data.find(value.encode("utf-8") + b"\x00"), -1)
+            else: 
+                # Other versions fall back to utf-16.
+                self.assertNotEqual(data.find(value.encode("utf-16") + b"\x00\x00"), -1)
+            
+            # Force UTF-16-BE encoding.
+            tag.encodings = ("utf-16-be",)
+            data = tag.encode()
+            self.assertNotEqual(data.find(value.encode("utf-16-be") + b"\x00\x00"), -1)
+
+            
     def testFrameOrder(self):
         # 24.stagger.sample-01.id3 contains a simple test tag that has file frames
         # in the following order:
