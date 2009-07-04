@@ -4,7 +4,7 @@ from distutils.core import setup;
 
 setup(
     name="stagger",
-    version="0.2.0",
+    version="0.3.0",
     url="http://code.google.com/p/stagger",
     author="Karoly Lorentey",
     author_email="karoly@lorentey.hu",
@@ -21,8 +21,10 @@ that is able to handle all the various badly formatted tags out there
 and allow you to convert them to a consensus format.
 """,
     classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 4 - Beta",
         "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: BSD License",
+        "Operating System :: OS Independent",
         "Topic :: Multimedia :: Sound/Audio"
         ],
     )
