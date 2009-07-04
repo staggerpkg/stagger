@@ -17,39 +17,40 @@ def list_id3(path):
 
 def generate_test(file):
     def test(self):
-        warnings.simplefilter("ignore", stagger.Warning)
-        tag = stagger.read_tag(file)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", stagger.Warning)
+            tag = stagger.read_tag(file)
 
-        prefix_to_class = {
-            "22.": stagger.Tag22,
-            "23.": stagger.Tag23,
-            "24.": stagger.Tag24
-            }
+            prefix_to_class = {
+                "22.": stagger.Tag22,
+                "23.": stagger.Tag23,
+                "24.": stagger.Tag24
+                }
 
-        # Check tag version based on filename prefix
-        basename = os.path.basename(file)
-        self.assertTrue(any(basename.startswith(prefix) for prefix in prefix_to_class))
-        for prefix in prefix_to_class:
-            if basename.startswith(prefix):
-                self.assertEqual(type(tag), prefix_to_class[prefix])
-                self.assertEqual(tag.version, int(prefix[1]))
+            # Check tag version based on filename prefix
+            basename = os.path.basename(file)
+            self.assertTrue(any(basename.startswith(prefix) for prefix in prefix_to_class))
+            for prefix in prefix_to_class:
+                if basename.startswith(prefix):
+                    self.assertEqual(type(tag), prefix_to_class[prefix])
+                    self.assertEqual(tag.version, int(prefix[1]))
 
-        # Scrub iTunes-produced invalid frames with frameids ending with space.
-        # Stagger won't save these, so they would result in a tag mismatch below.
-        badfile = False
-        for key in list(tag.keys()):
-            if key.endswith(" "):
-                del tag[key]
-                badfile = True
+            # Scrub iTunes-produced invalid frames with frameids ending with space.
+            # Stagger won't save these, so they would result in a tag mismatch below.
+            badfile = False
+            for key in list(tag.keys()):
+                if key.endswith(" "):
+                    del tag[key]
+                    badfile = True
 
-        tag.padding_max = 0
-        data = tag.encode()
-        tag2 = stagger.decode_tag(data)
-        tag.padding_max = 0
-        data2 = tag.encode()
+            tag.padding_max = 0
+            data = tag.encode()
+            tag2 = stagger.decode_tag(data)
+            tag.padding_max = 0
+            data2 = tag.encode()
 
-        self.assertEqual(data, data2, "data mismatch in file {0}".format(file))
-        self.assertEqual(tag, tag2, "tag mismatch in file{0}".format(file))
+            self.assertEqual(data, data2, "data mismatch in file {0}".format(file))
+            self.assertEqual(tag, tag2, "tag mismatch in file{0}".format(file))
     return test
 
 class SamplesTestCase(unittest.TestCase):

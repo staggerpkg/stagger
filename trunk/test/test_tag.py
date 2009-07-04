@@ -2,6 +2,7 @@
 
 import unittest
 import os.path
+import warnings
 
 import stagger
 from stagger.id3 import *
@@ -162,6 +163,31 @@ class TagTestCase(unittest.TestCase):
 
         tag2 = stagger.decode_tag(tagdata)
         self.assertTrue(tag == tag2)
+
+    def testMultipleStrings(self):
+        for cls in (stagger.Tag23, stagger.Tag24):
+            # Versions 2.3 and 2.4 have support for multiple values in text frames.
+            tag = cls()
+            tag.padding_max = 0
+            tag[TIT2] = ("Foo", "Bar", "Baz")
+            self.assertEqual(len(tag[TIT2].text), 3)
+            data = tag.encode()
+            dtag = stagger.decode_tag(data)
+            self.assertEqual(len(dtag[TIT2].text), 3)
+            self.assertEqual(dtag[TIT2].text, tag[TIT2].text)
+
+        # Version 2.2 has no such support, stagger merges multiple strings
+        tag = stagger.Tag22()
+        tag.padding_max = 0
+        tag[TT2] = ("Foo", "Bar", "Baz")
+        self.assertEqual(len(tag[TT2].text), 3)
+        with warnings.catch_warnings(record=True) as ws:
+            data = tag.encode()
+            self.assertEqual(len(ws), 1)
+            self.assertEqual(ws[0].category, stagger.FrameWarning)
+        dtag = stagger.decode_tag(data)
+        self.assertEqual(len(dtag[TT2].text), 1)
+        self.assertEqual(dtag[TT2].text, ["Foo / Bar / Baz"])
 
 suite = unittest.TestLoader().loadTestsFromTestCase(TagTestCase)
 
