@@ -369,8 +369,7 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
             else:
                 # Unknown frame
                 flags.add("unknown")
-                warn("{0}: Unknown frame".format(frameid), 
-                     UnknownFrameWarning)
+                warn("{0}: Unknown frame".format(frameid), UnknownFrameWarning)
                 if frameid.startswith('T'): # Unknown text frame
                     return Frames.TextFrame._decode(frameid, data, flags, 
                                                     frameno=frameno)
@@ -560,6 +559,8 @@ class Tag22(Tag):
                         frame.text = [" / ".join(frame.text)]
 
     def encode(self, size_hint=None):
+        if len(self) == 0:  # No frames -> no tag
+            return b""
         frames = self._prepare_frames()
         framedata = bytearray().join(self.__encode_one_frame(frame)
                                      for frame in frames)
@@ -717,6 +718,8 @@ class Tag23(Tag):
         return data
 
     def encode(self, size_hint=None):
+        if len(self) == 0:  # No frames -> no tag
+            return b""
         frames = self._prepare_frames()
         framedata = bytearray().join(self.__encode_one_frame(frame)
                                      for frame in frames)
@@ -924,6 +927,8 @@ class Tag24(Tag):
         return data
 
     def encode(self, size_hint=None):
+        if len(self) == 0:  # No frames -> no tag
+            return b""
         frames = self._prepare_frames()
         if "unsynchronised" in self.flags:
             for frame in frames: 

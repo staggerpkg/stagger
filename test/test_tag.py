@@ -189,6 +189,13 @@ class TagTestCase(unittest.TestCase):
         self.assertEqual(len(dtag[TT2].text), 1)
         self.assertEqual(dtag[TT2].text, ["Foo / Bar / Baz"])
 
+    def testEmptyTag(self):
+        for cls in (stagger.Tag22, stagger.Tag23, stagger.Tag24):
+            tag = cls()
+            # Empty tags should encode as an empty byte sequence
+            # (i.e., no tag header or padding).
+            self.assertEqual(len(tag.encode()), 0)
+
 suite = unittest.TestLoader().loadTestsFromTestCase(TagTestCase)
 
 if __name__ == "__main__":
