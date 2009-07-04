@@ -202,7 +202,7 @@ try:
                         for name in tag._friendly_names:
                             val = getattr(tag, name.replace("-", "_"))
                             if val:
-                                print("{0:>16}: {1}".format(name.title(), val))
+                                print("{0:>18}: {1}".format(name.title(), val))
                     print()
                 sys.stdout.flush()
 
