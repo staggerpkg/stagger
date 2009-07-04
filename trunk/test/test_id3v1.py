@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # Copyright (c) 2009, Karoly Lorentey  <karoly@lorentey.hu>
 
 # This test automatically downloads the ID3v1 test suite by Martin Nilsson,
@@ -35,6 +36,7 @@ import urllib.request
 import tarfile
 import random
 import io
+import warnings
 
 from stagger.errors import *
 import stagger.id3v1
@@ -141,6 +143,7 @@ class ID3v1TestCase(unittest.TestCase):
 suite = unittest.TestLoader().loadTestsFromTestCase(ID3v1TestCase)
 
 if __name__ == "__main__":
+    warnings.simplefilter("always", stagger.Warning)
     unittest.main(defaultTest="suite")
 
 

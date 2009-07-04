@@ -1,9 +1,11 @@
+#!/usr/bin/env python3
 # Copyright (c) 2009, Karoly Lorentey  <karoly@lorentey.hu>
 
 import unittest
 import io
 import random
 import tempfile
+import warnings
 
 from stagger.fileutil import *
 
@@ -65,5 +67,6 @@ class FileutilTestCase(unittest.TestCase):
 suite = unittest.TestLoader().loadTestsFromTestCase(FileutilTestCase)
 
 if __name__ == "__main__":
+    warnings.simplefilter("always", stagger.Warning)
     unittest.main(defaultTest="suite")
 

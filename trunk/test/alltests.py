@@ -2,6 +2,9 @@
 # Copyright (c) 2009, Karoly Lorentey  <karoly@lorentey.hu>
 
 import unittest
+import warnings
+
+import stagger
 
 import test_fileutil
 import test_conversion
@@ -21,4 +24,5 @@ suite.addTest(test_id3v1.suite)
 suite.addTest(test_id3v1_fileop.suite)
 
 if __name__ == "__main__":
+    warnings.simplefilter("always", stagger.Warning)
     unittest.main(defaultTest="suite")
