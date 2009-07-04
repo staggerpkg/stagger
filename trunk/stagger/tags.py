@@ -266,9 +266,9 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
                         "genre", 
                         # "comment", "compilation"
                         # "picture"
-                        # "sort-title", "sort-artist",
-                        # "sort-album-artist", "sort-album",
-                        # "sort-composer",
+                        "sort-title", "sort-artist",
+                        "sort-album-artist", "sort-album",
+                        "sort-composer",
                         ]
 
     title = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
@@ -278,6 +278,11 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     composer = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     genre = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     grouping = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
+    sort_title = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
+    sort_artist = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
+    sort_album_artist = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
+    sort_album = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
+    sort_composer = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
 
     @classmethod
     def _friendly_text_getter(cls, frameid):
@@ -502,6 +507,16 @@ class Tag22(Tag):
                         Tag._friendly_text_setter("TT1"))
     # TODO: compilation
     # TODO: comment
+    sort_title = property(Tag._friendly_text_getter("TST"),
+                          Tag._friendly_text_setter("TST"))
+    sort_artist = property(Tag._friendly_text_getter("TSP"),
+                           Tag._friendly_text_setter("TSP"))
+    sort_album_artist = property(Tag._friendly_text_getter("TS2"),
+                                 Tag._friendly_text_setter("TS2"))
+    sort_album = property(Tag._friendly_text_getter("TSA"),
+                          Tag._friendly_text_setter("TSA"))
+    sort_composer = property(Tag._friendly_text_getter("TSC"),
+                             Tag._friendly_text_setter("TSC"))
 
     def _read_header(self, file):
         self.offset = file.tell()
@@ -607,6 +622,16 @@ class Tag23(Tag):
                         Tag._friendly_text_setter("TIT1"))
     # TODO: compilation
     # TODO: comment
+    sort_title = property(Tag._friendly_text_getter("TSOT"),
+                          Tag._friendly_text_setter("TSOT"))
+    sort_artist = property(Tag._friendly_text_getter("TSOP"),
+                           Tag._friendly_text_setter("TSOP"))
+    sort_album_artist = property(Tag._friendly_text_getter("TSO2"),
+                                 Tag._friendly_text_setter("TSO2"))
+    sort_album = property(Tag._friendly_text_getter("TSOA"),
+                          Tag._friendly_text_setter("TSOA"))
+    sort_composer = property(Tag._friendly_text_getter("TSOC"),
+                             Tag._friendly_text_setter("TSOC"))
 
     def _read_header(self, file):
         self.offset = file.tell()
@@ -771,6 +796,16 @@ class Tag24(Tag):
                         Tag._friendly_text_setter("TIT1"))
     # TODO: compilation
     # TODO: comment
+    sort_title = property(Tag._friendly_text_getter("TSOT"),
+                          Tag._friendly_text_setter("TSOT"))
+    sort_artist = property(Tag._friendly_text_getter("TSOP"),
+                           Tag._friendly_text_setter("TSOP"))
+    sort_album_artist = property(Tag._friendly_text_getter("TSO2"),
+                                 Tag._friendly_text_setter("TSO2"))
+    sort_album = property(Tag._friendly_text_getter("TSOA"),
+                          Tag._friendly_text_setter("TSOA"))
+    sort_composer = property(Tag._friendly_text_getter("TSOC"),
+                             Tag._friendly_text_setter("TSOC"))
 
     def _read_header(self, file):
         self.offset = file.tell()
