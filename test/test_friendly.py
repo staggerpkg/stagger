@@ -146,6 +146,103 @@ class FriendlyTestCase(unittest.TestCase):
                 setattr(tag, total, 13)
                 self.assertEqual(tag[frame], frame(text=["0/13"]))
 
+    def testDate22_23(self):
+        for tagcls, yearframe, dateframe, timeframe in ((stagger.Tag22, TYE, TDA, TIM),
+                                                        (stagger.Tag23, TYER, TDAT, TIME)):
+            tag = tagcls()
+
+            # Check empty
+            self.assertEqual(tag.date, "")
+
+            # Set to empty
+            tag.date = ""
+            self.assertEqual(tag.date, "")
+
+            # Set a year
+            tag.date = "2009"
+            self.assertEqual(tag.date, "2009")
+            tag.date = "   2009    "
+            self.assertEqual(tag.date, "2009")
+            self.assertEqual(tag[yearframe], yearframe("2009"))
+            self.assertTrue(dateframe not in tag)
+            self.assertTrue(timeframe not in tag)
+
+            # Partial date
+            tag.date = "2009-07"
+            self.assertEqual(tag.date, "2009")
+            self.assertEqual(tag[yearframe], yearframe("2009"))
+            self.assertTrue(dateframe not in tag)
+            self.assertTrue(timeframe not in tag)
+
+            # Full date
+            tag.date = "2009-07-12"
+            self.assertEqual(tag.date, "2009-07-12")
+            self.assertEqual(tag[yearframe], yearframe("2009"))
+            self.assertEqual(tag[dateframe], dateframe("0712"))
+            self.assertTrue(timeframe not in tag)
+
+            # Date + time
+            tag.date = "2009-07-12 18:01"
+            self.assertEqual(tag.date, "2009-07-12 18:01")
+            self.assertEqual(tag[yearframe], yearframe("2009"))
+            self.assertEqual(tag[dateframe], dateframe("0712"))
+            self.assertEqual(tag[timeframe], timeframe("1801"))
+            
+            tag.date = "2009-07-12 18:01:23"
+            self.assertEqual(tag.date, "2009-07-12 18:01")
+            self.assertEqual(tag[yearframe], yearframe("2009"))
+            self.assertEqual(tag[dateframe], dateframe("0712"))
+            self.assertEqual(tag[timeframe], timeframe("1801"))
+
+            tag.date = "2009-07-12T18:01:23"
+            self.assertEqual(tag.date, "2009-07-12 18:01")
+            self.assertEqual(tag[yearframe], yearframe("2009"))
+            self.assertEqual(tag[dateframe], dateframe("0712"))
+            self.assertEqual(tag[timeframe], timeframe("1801"))
+
+            # Truncate to year only
+            tag.date = "2009"
+            self.assertEqual(tag[yearframe], yearframe("2009"))
+            self.assertTrue(dateframe not in tag)
+            self.assertTrue(timeframe not in tag)
+            
+    def testDate24(self):
+        tag = stagger.Tag24()
+            
+        # Check empty
+        self.assertEqual(tag.date, "")
+
+        # Set to empty
+        tag.date = ""
+        self.assertEqual(tag.date, "")
+
+        # Set a year
+        tag.date = "2009"
+        self.assertEqual(tag.date, "2009")
+        self.assertEqual(tag[TDRC], TDRC(tag.date))
+        tag.date = "   2009    "
+        self.assertEqual(tag.date, "2009")
+        self.assertEqual(tag[TDRC], TDRC(tag.date))
+        
+        tag.date = "2009-07"
+        self.assertEqual(tag.date, "2009-07")
+        self.assertEqual(tag[TDRC], TDRC(tag.date))
+        tag.date = "2009-07-12"
+        self.assertEqual(tag.date, "2009-07-12")
+        self.assertEqual(tag[TDRC], TDRC(tag.date))
+        
+        tag.date = "2009-07-12 18:01"
+        self.assertEqual(tag.date, "2009-07-12 18:01")
+        self.assertEqual(tag[TDRC], TDRC(tag.date))
+        
+        tag.date = "2009-07-12 18:01:23"
+        self.assertEqual(tag.date, "2009-07-12 18:01:23")
+        self.assertEqual(tag[TDRC], TDRC(tag.date))
+            
+        tag.date = "2009-07-12T18:01:23"
+        self.assertEqual(tag.date, "2009-07-12 18:01:23")
+        self.assertEqual(tag[TDRC], TDRC(tag.date))
+
 suite = unittest.TestLoader().loadTestsFromTestCase(FriendlyTestCase)
 
 if __name__ == "__main__":

@@ -258,7 +258,7 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
 
     # Friendly names API
     _friendly_names = [ "title", "artist", 
-                        # "date", 
+                        "date", 
                         "album-artist", "album", 
                         "track", "track-total",
                         "disc", "disc-total",
@@ -273,6 +273,7 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
 
     title = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     artist = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
+    date = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     album_artist = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     album = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     track = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
@@ -355,6 +356,81 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
                 del self[frameid]
         return (getter, setter)
 
+    __date_pattern = re.compile(r"""(?x)\s*
+                  ((?P<year>[0-9]{4})       # YYYY
+                  (-(?P<month>[01][0-9])    # -MM
+                  (-(?P<day>[0-3][0-9])     # -DD
+                  )?)?)?
+                  [ T]?
+                  ((?P<hour>[0-2][0-9])     #  HH
+                  (:(?P<min>[0-6][0-9])     # :MM
+                  (:(?P<sec>[0-6][0-9])     # :SS
+                  )?)?)?\s*
+                  """)
+
+    @classmethod
+    def _validate_friendly_date(cls, string):
+        m = cls.__date_pattern.match(string)
+        if m is None or m.end() != len(string):
+            raise ValueError("date must be in 'YYYY-MM-DD HH:MM:SS' format")
+
+    @classmethod
+    def _get_friendly_date(cls, string):
+        m = cls.__date_pattern.match(string)
+        if m is None:
+            return (None, None, None, None, None, None)
+        res = []
+        for field in ("year", "month", "day", "hour", "min", "sec"):
+            v = m.group(field)
+            res.append(int(v) if v is not None else None)
+        return res
+
+    def _get_date(self, yearframe, dateframe, timeframe):
+        year = month = day = hour = minute = second = None
+        
+        # Parse year.
+        try:
+            year = int(self[yearframe].text[0])
+        except (KeyError, ValueError):
+            pass
+        
+        # Parse month and date.
+        try:
+            date = self[dateframe].text[0]
+            m = re.match(r"\s*(?P<month>[01][0-9])\s*-?\s*(?P<day>[0-3][0-9])?\s*$", 
+                         date)
+            if m is not None:
+                month = int(m.group("month"))
+                day = int(m.group("day"))
+        except KeyError: 
+            pass
+
+        # Parse time.
+        try:
+            time = self[timeframe].text[0]
+            m = re.match(r"\s*(?P<hour>[0-2][0-9])\s*:?\s*"
+                         "(?P<minute>[0-5][0-9])\s*:?\s*"
+                         "(?P<second>[0-5][0-9])?\s*$", time)
+            if m is not None:
+                hour = int(m.group("hour"))
+                minute = int(m.group("minute"))
+                s = m.group("second")
+                second = int(s) if s is not None else None
+        except KeyError: 
+            pass
+        return (year, month, day, hour, minute, second)
+
+    def _friendly_date_string(self, *fields):
+        seps = ("", "-", "-", " ", ":", ":")
+        formats = ("04", "02", "02", "02", "02", "02")
+        res = []
+        for i in range(len(fields)):
+            if fields[i] is None:
+                break
+            res.append(seps[i])
+            res.append("{0:{1}}".format(fields[i], formats[i]))
+        return "".join(res)
+    
     # Misc
     def frames(self, orig_order=False):
         """Returns a list of frames in this tag, sorted according to frame_order.
@@ -540,6 +616,26 @@ class Tag22(Tag):
 
     title = property(*Tag._friendly_text_frame("TT2"))
     artist = property(*Tag._friendly_text_frame("TP1"))
+
+    @property
+    def date(self):
+        fields = self._get_date("TYE", "TDA", "TIM")
+        return self._friendly_date_string(*fields)
+
+    @date.setter
+    def date(self, value):
+        self._validate_friendly_date(value)
+        (year, month, day, hour, minute, second) = self._get_friendly_date(value)
+        for f in "TYE", "TDA", "TIM":
+            if f in self:
+                del self[f]
+        if year is not None:
+            self["TYE"] = "{0:04}".format(year)
+        if month is not None and day is not None:
+            self["TDA"] = "{0:02}{1:02}".format(month, day)
+        if hour is not None and minute is not None:
+            self["TIM"] = "{0:02}{1:02}".format(hour, minute)
+
     album_artist = property(*Tag._friendly_text_frame("TP2"))
     album = property(*Tag._friendly_text_frame("TAL"))
     track = property(*Tag._friendly_track("TRK", "track_total"))
@@ -548,7 +644,6 @@ class Tag22(Tag):
     disc_total = property(*Tag._friendly_track_total("TPA", "disc"))
     composer = property(*Tag._friendly_text_frame("TCM"))
     genre = property(*Tag._friendly_text_frame("TCO"))
-    # TODO: date
     # TODO: picture
     grouping = property(*Tag._friendly_text_frame("TT1"))
     # TODO: compilation
@@ -645,6 +740,26 @@ class Tag23(Tag):
 
     title = property(*Tag._friendly_text_frame("TIT2"))
     artist = property(*Tag._friendly_text_frame("TPE1"))
+
+    @property
+    def date(self):
+        fields = self._get_date("TYER", "TDAT", "TIME")
+        return self._friendly_date_string(*fields)
+
+    @date.setter
+    def date(self, value):
+        self._validate_friendly_date(value)
+        (year, month, day, hour, minute, second) = self._get_friendly_date(value)
+        for f in "TYER", "TDAT", "TIME":
+            if f in self:
+                del self[f]
+        if year is not None:
+            self["TYER"] = "{0:04}".format(year)
+        if month is not None and day is not None:
+            self["TDAT"] = "{0:02}{1:02}".format(month, day)
+        if hour is not None and minute is not None:
+            self["TIME"] = "{0:02}{1:02}".format(hour, minute)
+
     album_artist = property(*Tag._friendly_text_frame("TPE2"))
     album = property(*Tag._friendly_text_frame("TALB"))
     track = property(*Tag._friendly_track("TRCK", "track_total"))
@@ -653,7 +768,6 @@ class Tag23(Tag):
     disc_total = property(*Tag._friendly_track_total("TPOS", "disc"))
     composer = property(*Tag._friendly_text_frame("TCOM"))
     genre = property(*Tag._friendly_text_frame("TCON"))
-    # TODO: date
     # TODO: picture
     grouping = property(*Tag._friendly_text_frame("TIT1"))
     # TODO: compilation
@@ -809,6 +923,26 @@ class Tag24(Tag):
 
     title = property(*Tag._friendly_text_frame("TIT2"))
     artist = property(*Tag._friendly_text_frame("TPE1"))
+    
+    @property
+    def date(self):
+        try:
+            frame = self["TDRC"]
+        except KeyError:
+            return ""
+        else:
+            return frame.text[0]
+
+    @date.setter
+    def date(self, value):
+        self._validate_friendly_date(value)
+        fields = self._get_friendly_date(value)
+        val = self._friendly_date_string(*fields)
+        if val:
+            self["TDRC"] = val
+        elif "TDRC" in self:
+            del self["TDRC"]
+
     album = property(*Tag._friendly_text_frame("TALB"))
     album_artist = property(*Tag._friendly_text_frame("TPE2"))
     track = property(*Tag._friendly_track("TRCK", "track_total"))
@@ -817,7 +951,6 @@ class Tag24(Tag):
     disc_total = property(*Tag._friendly_track_total("TPOS", "disc"))
     composer = property(*Tag._friendly_text_frame("TCOM"))
     genre = property(*Tag._friendly_text_frame("TCON"))
-    # TODO: date
     # TODO: picture
     grouping = property(*Tag._friendly_text_frame("TIT1"))
     # TODO: compilation
