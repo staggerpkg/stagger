@@ -260,8 +260,8 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     _friendly_names = [ "title", "artist", 
                         # "date", 
                         "album-artist", "album", 
-                        # "track", "track-total",
-                        # "disk", "disk-total",
+                        "track", "track-total",
+                        "disc", "disc-total",
                         "grouping", "composer", 
                         "genre", 
                         # "comment", "compilation"
@@ -275,6 +275,10 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     artist = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     album_artist = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     album = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
+    track = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
+    track_total = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
+    disc = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
+    disc_total = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     composer = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     genre = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     grouping = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
@@ -285,7 +289,7 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     sort_composer = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
 
     @classmethod
-    def _friendly_text_getter(cls, frameid):
+    def _friendly_text_frame(cls, frameid):
         def getter(self):
             try:
                 frame = self[frameid]
@@ -293,17 +297,64 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
                 return ""
             else:
                 return " / ".join(frame.text)
-        return getter
-
-    @classmethod
-    def _friendly_text_setter(cls, frameid):
         def setter(self, value):
             if isinstance(value, str):
-                self[frameid] = value.split(" / ")
+                if len(value): 
+                    # For non-empty strings, split value
+                    self[frameid] = value.split(" / ")
+                elif frameid in self:
+                    # For empty strings, delete frame
+                    del self[frameid]
             else:
                 self[frameid] = value
-        return setter
-    
+        return (getter, setter)
+
+    @classmethod
+    def _friendly_track(cls, frameid, totalattr):
+        def getter(self):
+            try:
+                frame = self[frameid]
+            except KeyError:
+                return 0
+            (track, sep, total) = frame.text[0].partition("/")
+            try:
+                return int(track.strip())
+            except ValueError:
+                return 0
+        def setter(self, value):
+            value = int(value)
+            total = getattr(self, totalattr)
+            if total > 0:
+                self[frameid] = "{0}/{1}".format(value, total)
+            elif value:
+                self[frameid] = str(value)
+            elif frameid in self:
+                del self[frameid]
+        return (getter, setter)
+
+    @classmethod
+    def _friendly_track_total(cls, frameid, trackattr):
+        def getter(self):
+            try:
+                frame = self[frameid]
+            except KeyError:
+                return 0
+            (track, sep, total) = frame.text[0].partition("/")
+            try:
+                return int(total.strip())
+            except ValueError:
+                return 0
+        def setter(self, value):
+            value = int(value)
+            track = getattr(self, trackattr)
+            if value:
+                self[frameid] = "{0}/{1}".format(track, value)
+            elif track:
+                self[frameid] = str(track)
+            elif frameid in self:
+                del self[frameid]
+        return (getter, setter)
+
     # Misc
     def frames(self, orig_order=False):
         """Returns a list of frames in this tag, sorted according to frame_order.
@@ -487,36 +538,26 @@ class Tag22(Tag):
     def __init__(self):
         super().__init__()
 
-    title = property(Tag._friendly_text_getter("TT2"), 
-                     Tag._friendly_text_setter("TT2"))
-    artist = property(Tag._friendly_text_getter("TP1"), 
-                      Tag._friendly_text_setter("TP1"))
-    album_artist = property(Tag._friendly_text_getter("TP2"), 
-                            Tag._friendly_text_setter("TP2"))
-    album = property(Tag._friendly_text_getter("TAL"), 
-                     Tag._friendly_text_setter("TAL"))
-    # TODO: track / track-total
-    # TODO: disk / disk-total
-    composer = property(Tag._friendly_text_getter("TCM"), 
-                        Tag._friendly_text_setter("TCM"))
-    genre = property(Tag._friendly_text_getter("TCO"), 
-                     Tag._friendly_text_setter("TCO"))
+    title = property(*Tag._friendly_text_frame("TT2"))
+    artist = property(*Tag._friendly_text_frame("TP1"))
+    album_artist = property(*Tag._friendly_text_frame("TP2"))
+    album = property(*Tag._friendly_text_frame("TAL"))
+    track = property(*Tag._friendly_track("TRK", "track_total"))
+    track_total = property(*Tag._friendly_track_total("TRK", "track"))
+    disc = property(*Tag._friendly_track("TPA", "disc_total"))
+    disc_total = property(*Tag._friendly_track_total("TPA", "disc"))
+    composer = property(*Tag._friendly_text_frame("TCM"))
+    genre = property(*Tag._friendly_text_frame("TCO"))
     # TODO: date
     # TODO: picture
-    grouping = property(Tag._friendly_text_getter("TT1"), 
-                        Tag._friendly_text_setter("TT1"))
+    grouping = property(*Tag._friendly_text_frame("TT1"))
     # TODO: compilation
     # TODO: comment
-    sort_title = property(Tag._friendly_text_getter("TST"),
-                          Tag._friendly_text_setter("TST"))
-    sort_artist = property(Tag._friendly_text_getter("TSP"),
-                           Tag._friendly_text_setter("TSP"))
-    sort_album_artist = property(Tag._friendly_text_getter("TS2"),
-                                 Tag._friendly_text_setter("TS2"))
-    sort_album = property(Tag._friendly_text_getter("TSA"),
-                          Tag._friendly_text_setter("TSA"))
-    sort_composer = property(Tag._friendly_text_getter("TSC"),
-                             Tag._friendly_text_setter("TSC"))
+    sort_title = property(*Tag._friendly_text_frame("TST"))
+    sort_artist = property(*Tag._friendly_text_frame("TSP"))
+    sort_album_artist = property(*Tag._friendly_text_frame("TS2"))
+    sort_album = property(*Tag._friendly_text_frame("TSA"))
+    sort_composer = property(*Tag._friendly_text_frame("TSC"))
 
     def _read_header(self, file):
         self.offset = file.tell()
@@ -602,36 +643,26 @@ class Tag23(Tag):
     def __init__(self):
         super().__init__()
 
-    title = property(Tag._friendly_text_getter("TIT2"), 
-                     Tag._friendly_text_setter("TIT2"))
-    artist = property(Tag._friendly_text_getter("TPE1"), 
-                      Tag._friendly_text_setter("TPE1"))
-    album_artist = property(Tag._friendly_text_getter("TPE2"), 
-                            Tag._friendly_text_setter("TPE2"))
-    album = property(Tag._friendly_text_getter("TALB"), 
-                     Tag._friendly_text_setter("TALB"))
-    # TODO: track / track-total
-    # TODO: disk / disk-total
-    composer = property(Tag._friendly_text_getter("TCOM"), 
-                        Tag._friendly_text_setter("TCOM"))
-    genre = property(Tag._friendly_text_getter("TCON"), 
-                     Tag._friendly_text_setter("TCON"))
+    title = property(*Tag._friendly_text_frame("TIT2"))
+    artist = property(*Tag._friendly_text_frame("TPE1"))
+    album_artist = property(*Tag._friendly_text_frame("TPE2"))
+    album = property(*Tag._friendly_text_frame("TALB"))
+    track = property(*Tag._friendly_track("TRCK", "track_total"))
+    track_total = property(*Tag._friendly_track_total("TRCK", "track"))
+    disc = property(*Tag._friendly_track("TPOS", "disc_total"))
+    disc_total = property(*Tag._friendly_track_total("TPOS", "disc"))
+    composer = property(*Tag._friendly_text_frame("TCOM"))
+    genre = property(*Tag._friendly_text_frame("TCON"))
     # TODO: date
     # TODO: picture
-    grouping = property(Tag._friendly_text_getter("TIT1"), 
-                        Tag._friendly_text_setter("TIT1"))
+    grouping = property(*Tag._friendly_text_frame("TIT1"))
     # TODO: compilation
     # TODO: comment
-    sort_title = property(Tag._friendly_text_getter("TSOT"),
-                          Tag._friendly_text_setter("TSOT"))
-    sort_artist = property(Tag._friendly_text_getter("TSOP"),
-                           Tag._friendly_text_setter("TSOP"))
-    sort_album_artist = property(Tag._friendly_text_getter("TSO2"),
-                                 Tag._friendly_text_setter("TSO2"))
-    sort_album = property(Tag._friendly_text_getter("TSOA"),
-                          Tag._friendly_text_setter("TSOA"))
-    sort_composer = property(Tag._friendly_text_getter("TSOC"),
-                             Tag._friendly_text_setter("TSOC"))
+    sort_title = property(*Tag._friendly_text_frame("TSOT"))
+    sort_artist = property(*Tag._friendly_text_frame("TSOP"))
+    sort_album_artist = property(*Tag._friendly_text_frame("TSO2"))
+    sort_album = property(*Tag._friendly_text_frame("TSOA"))
+    sort_composer = property(*Tag._friendly_text_frame("TSOC"))
 
     def _read_header(self, file):
         self.offset = file.tell()
@@ -776,36 +807,26 @@ class Tag24(Tag):
     def __init__(self):
         super().__init__()
 
-    title = property(Tag._friendly_text_getter("TIT2"), 
-                     Tag._friendly_text_setter("TIT2"))
-    artist = property(Tag._friendly_text_getter("TPE1"), 
-                      Tag._friendly_text_setter("TPE1"))
-    album = property(Tag._friendly_text_getter("TALB"), 
-                     Tag._friendly_text_setter("TALB"))
-    album_artist = property(Tag._friendly_text_getter("TPE2"), 
-                            Tag._friendly_text_setter("TPE2"))
-    # TODO: track / track-total
-    # TODO: disk / disk-total
-    composer = property(Tag._friendly_text_getter("TCOM"), 
-                        Tag._friendly_text_setter("TCOM"))
-    genre = property(Tag._friendly_text_getter("TCON"), 
-                     Tag._friendly_text_setter("TCON"))
+    title = property(*Tag._friendly_text_frame("TIT2"))
+    artist = property(*Tag._friendly_text_frame("TPE1"))
+    album = property(*Tag._friendly_text_frame("TALB"))
+    album_artist = property(*Tag._friendly_text_frame("TPE2"))
+    track = property(*Tag._friendly_track("TRCK", "track_total"))
+    track_total = property(*Tag._friendly_track_total("TRCK", "track"))
+    disc = property(*Tag._friendly_track("TPOS", "disc_total"))
+    disc_total = property(*Tag._friendly_track_total("TPOS", "disc"))
+    composer = property(*Tag._friendly_text_frame("TCOM"))
+    genre = property(*Tag._friendly_text_frame("TCON"))
     # TODO: date
     # TODO: picture
-    grouping = property(Tag._friendly_text_getter("TIT1"), 
-                        Tag._friendly_text_setter("TIT1"))
+    grouping = property(*Tag._friendly_text_frame("TIT1"))
     # TODO: compilation
     # TODO: comment
-    sort_title = property(Tag._friendly_text_getter("TSOT"),
-                          Tag._friendly_text_setter("TSOT"))
-    sort_artist = property(Tag._friendly_text_getter("TSOP"),
-                           Tag._friendly_text_setter("TSOP"))
-    sort_album_artist = property(Tag._friendly_text_getter("TSO2"),
-                                 Tag._friendly_text_setter("TSO2"))
-    sort_album = property(Tag._friendly_text_getter("TSOA"),
-                          Tag._friendly_text_setter("TSOA"))
-    sort_composer = property(Tag._friendly_text_getter("TSOC"),
-                             Tag._friendly_text_setter("TSOC"))
+    sort_title = property(*Tag._friendly_text_frame("TSOT"))
+    sort_artist = property(*Tag._friendly_text_frame("TSOP"))
+    sort_album_artist = property(*Tag._friendly_text_frame("TSO2"))
+    sort_album = property(*Tag._friendly_text_frame("TSOA"))
+    sort_composer = property(*Tag._friendly_text_frame("TSOC"))
 
     def _read_header(self, file):
         self.offset = file.tell()
