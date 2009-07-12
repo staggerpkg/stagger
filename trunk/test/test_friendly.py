@@ -145,18 +145,6 @@ class FriendlyTestCase(unittest.TestCase):
                 # Set just the total
                 setattr(tag, total, 13)
                 self.assertEqual(tag[frame], frame(text=["0/13"]))
-            
-    def testEmptyTextFrames(self):
-        
-        testfile = os.path.join(os.path.dirname(__file__), "samples", 
-                                "24.stagger.empty-strings.id3")
-        with warnings.catch_warnings(record=True) as ws:
-            tag = stagger.read_tag(testfile)
-            self.assertEqual(tag[TIT2].text, ["Foobar"])
-            self.assertEqual(len(ws), 1)
-            self.assertEqual(ws[0].category, stagger.FrameWarning)    
-            self.assertEqual(ws[0].message.args, ("TIT2: Stripped 13 empty strings "
-                             "from end of frame",))
 
 suite = unittest.TestLoader().loadTestsFromTestCase(FriendlyTestCase)
 
