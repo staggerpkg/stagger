@@ -11,6 +11,7 @@ import test_conversion
 import test_specs
 import test_samples
 import test_tag
+import test_friendly
 import test_id3v1
 import test_id3v1_fileop
 
@@ -20,6 +21,7 @@ suite.addTest(test_conversion.suite)
 suite.addTest(test_specs.suite)
 suite.addTest(test_samples.suite)
 suite.addTest(test_tag.suite)
+suite.addTest(test_friendly.suite)
 suite.addTest(test_id3v1.suite)
 suite.addTest(test_id3v1_fileop.suite)
 
