@@ -364,14 +364,22 @@ class RVRB(Frame):
     _bozo = True
 
 @frameclass
-class APIC(Frame):
+class APIC(PictureFrame):
     "Attached picture"
     _framespec = (EncodingSpec("encoding"),
                   NullTerminatedStringSpec("mime"),
-                  ByteSpec("type"),
+                  PictureTypeSpec("type"),
                   EncodedStringSpec("desc"),
                   BinaryDataSpec("data"))
     _allow_duplicates = True
+
+    def _set_format(self, format):
+        if format.lower() in ("jpeg", "jpg", "image/jpeg", "image/jpg"):
+            self.mime = "image/jpeg"
+        elif format.lower() in ("png", "image/png"):
+            self.mime = "image/png"
+        else:
+            raise ValueError("invalid image format")
 
     def _to_version(self, version):
         if version in (3, 4):
@@ -386,12 +394,11 @@ class APIC(Frame):
     def _str_fields(self):
         img = "{0} bytes of {1} data".format(len(self.data), 
                                              imghdr.what(None, self.data[:32]))
-        return "{0}({1}), desc={2}, mime={3}: {4}".format(self.type,
-                                                          picture_types[self.type],
-                                                          repr(self.desc),
-                                                          repr(self.mime),
-                                                          img)
-    
+        return ("type={0}, desc={1}, mime={2}: {3}"
+                .format(repr(self._spec("type").to_str(self.type)),
+                        repr(self.desc),
+                        repr(self.mime),
+                        img))
 
 @frameclass
 class GEOB(Frame):
@@ -758,15 +765,23 @@ class EQU(EQUA): pass
 class REV(RVRB): pass
 
 @frameclass
-class PIC(Frame):
+class PIC(PictureFrame):
     "Attached picture"
     _framespec = (EncodingSpec("encoding"),
                   SimpleStringSpec("format", 3),
-                  ByteSpec("type"),
+                  PictureTypeSpec("type"),
                   EncodedStringSpec("desc"),
                   BinaryDataSpec("data"))
     _allow_duplicates = True
     _version = 2
+
+    def _set_format(self, format):
+        if format.lower() in ("jpeg", "jpg", "image/jpeg", "image/jpg"):
+            self.format = "JPG"
+        elif format.lower() in ("png", "image/png"):
+            self.format = "PNG"
+        else:
+            raise ValueError("invalid image format")
 
     def _to_version(self, version):
         if version == 2:
@@ -785,13 +800,12 @@ class PIC(Frame):
         
     def _str_fields(self):
         img = "{0} bytes of {1} data".format(len(self.data), 
-                                               imghdr.what(None, self.data[:32]))
-        return "{0}({1}), desc={2}, format={3}: {4}".format(self.type,
-                                                          picture_types[self.type],
-                                                          repr(self.desc),
-                                                repr(self.format),
-                                                img)
-
+                                             imghdr.what(None, self.data[:32]))
+        return ("type={0}, desc={1}, format={2}: {3}"
+                .format(repr(self._spec("type").to_str(self.type)),
+                        repr(self.desc),
+                        repr(self.format),
+                        img))
 
 @frameclass
 class GEO(GEOB): pass
@@ -914,15 +928,6 @@ class TSOC(TextFrame):
 @frameclass
 class TSC(TSOC): pass
 
-# Attached picture (APIC & PIC) types
-picture_types = (
-    "Other", "32x32 icon", "Other icon", "Front Cover", "Back Cover",
-    "Leaflet", "Media", "Lead artist", "Artist", "Conductor",
-    "Band/Orchestra", "Composer", "Lyricist/text writer",
-    "Recording Location", "Recording", "Performance", "Screen capture",
-    "A bright coloured fish", "Illustration", "Band/artist",
-    "Publisher/Studio")
-
 # ID3v1 genre list
 genres = (
     "Blues", "Classic Rock", "Country", "Dance", "Disco", "Funk", "Grunge",
@@ -969,7 +974,6 @@ genres = (
     "Heavy Metal", "Black Metal", "Crossover", "Contemporary Christian",
     "Christian Rock", "Merengue", "Salsa", "Thrash Metal", "Anime", "JPop",
     "Synthpop")
-
 
 __all__ = [ obj.__name__ for obj in globals().values() 
             if is_frame_class(obj)]

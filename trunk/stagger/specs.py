@@ -32,7 +32,7 @@ class Spec(metaclass=abc.ABCMeta):
         return value
 
     def to_str(self, value):
-        return "{0}={1}".format(self.name, repr(value))
+        return str(value)
 
 class ByteSpec(Spec):
     def read(self, frame, data):
@@ -202,7 +202,7 @@ class BinaryDataSpec(Spec):
             raise TypeError("Not a byte sequence")
         return value
     def to_str(self, value):
-        return '{0}={1}{2}'.format(self.name, value[0:16], "..." if len(value) > 16 else "")
+        return '{0}{1}'.format(value[0:16], "..." if len(value) > 16 else "")
 
 class SimpleStringSpec(Spec):
     def __init__(self, name, length):
@@ -219,7 +219,7 @@ class SimpleStringSpec(Spec):
         return data
     def validate(self, frame, value):
         if value is None:
-            return b" " * self.length
+            return None
         if not isinstance(value, str):
             raise TypeError("Not a string")
         if len(value) != self.length: 
@@ -419,3 +419,34 @@ class ASPISpec(Spec):
         for v in values:
             res.append(v)
         return res
+
+class PictureTypeSpec(ByteSpec):
+    picture_types = (
+        "Other", "32x32 icon", "Other icon", "Front Cover", "Back Cover",
+        "Leaflet", "Media", "Lead artist", "Artist", "Conductor",
+        "Band/Orchestra", "Composer", "Lyricist/text writer",
+        "Recording Location", "Recording", "Performance", "Screen capture",
+        "A bright coloured fish", "Illustration", "Band/artist",
+        "Publisher/Studio")
+
+    def validate(self, frame, value):
+        if value is None:
+            return value
+        if isinstance(value, str):
+            def matches(value, name):
+                return value.lower() == name.lower()
+            for i in range(len(self.picture_types)):
+                if matches(value, self.picture_types[i]):
+                    value = i
+                    break
+            else:
+                raise ValueError("Unknown picture type: " + repr(value))
+        if not isinstance(value, int):
+            raise TypeError("Not a picture type")
+        if 0 <= value < len(self.picture_types):
+            return value
+        raise ValueError("Unknown picture type 0x{0:X}".format(value))
+
+    def to_str(self, value):
+        return "{1}({0})".format(value, self.picture_types[value])
+
