@@ -5,6 +5,7 @@ import struct
 import re
 import collections
 import io
+import imghdr
 
 from abc import abstractmethod, abstractproperty
 from warnings import warn
@@ -264,8 +265,8 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
                         "disc", "disc-total",
                         "grouping", "composer", 
                         "genre", 
-                        # "comment", "compilation"
-                        # "picture"
+                        # "comment", "compilation",
+                        "picture",
                         "sort-title", "sort-artist",
                         "sort-album-artist", "sort-album",
                         "sort-composer",
@@ -283,6 +284,7 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     composer = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     genre = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     grouping = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
+    picture = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     sort_title = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     sort_artist = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     sort_album_artist = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
@@ -430,7 +432,26 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
             res.append(seps[i])
             res.append("{0:{1}}".format(fields[i], formats[i]))
         return "".join(res)
-    
+
+    @classmethod
+    def _friendly_picture(cls, frameid):
+        def getter(self):
+            if frameid not in self:
+                return ""
+            else:
+                return ", ".join("{0}:{1}:<{2} bytes of {3} data>"
+                                 .format(f._spec("type").to_str(f.type),
+                                         f.desc,
+                                         len(f.data),
+                                         imghdr.what(None, f.data[:32]))
+                                 for f in self[frameid])
+        def setter(self, value):
+            if len(value) > 0:
+                self[frameid] = [self.known_frames[frameid](value=value)]
+            elif frameid in self:
+                del self[frameid]
+        return (getter, setter)
+
     # Misc
     def frames(self, orig_order=False):
         """Returns a list of frames in this tag, sorted according to frame_order.
@@ -644,10 +665,10 @@ class Tag22(Tag):
     disc_total = property(*Tag._friendly_track_total("TPA", "disc"))
     composer = property(*Tag._friendly_text_frame("TCM"))
     genre = property(*Tag._friendly_text_frame("TCO"))
-    # TODO: picture
     grouping = property(*Tag._friendly_text_frame("TT1"))
     # TODO: compilation
     # TODO: comment
+    picture = property(*Tag._friendly_picture("PIC"))
     sort_title = property(*Tag._friendly_text_frame("TST"))
     sort_artist = property(*Tag._friendly_text_frame("TSP"))
     sort_album_artist = property(*Tag._friendly_text_frame("TS2"))
@@ -768,10 +789,10 @@ class Tag23(Tag):
     disc_total = property(*Tag._friendly_track_total("TPOS", "disc"))
     composer = property(*Tag._friendly_text_frame("TCOM"))
     genre = property(*Tag._friendly_text_frame("TCON"))
-    # TODO: picture
     grouping = property(*Tag._friendly_text_frame("TIT1"))
     # TODO: compilation
     # TODO: comment
+    picture = property(*Tag._friendly_picture("APIC"))
     sort_title = property(*Tag._friendly_text_frame("TSOT"))
     sort_artist = property(*Tag._friendly_text_frame("TSOP"))
     sort_album_artist = property(*Tag._friendly_text_frame("TSO2"))
@@ -951,10 +972,10 @@ class Tag24(Tag):
     disc_total = property(*Tag._friendly_track_total("TPOS", "disc"))
     composer = property(*Tag._friendly_text_frame("TCOM"))
     genre = property(*Tag._friendly_text_frame("TCON"))
-    # TODO: picture
     grouping = property(*Tag._friendly_text_frame("TIT1"))
     # TODO: compilation
     # TODO: comment
+    picture = property(*Tag._friendly_picture("APIC"))
     sort_title = property(*Tag._friendly_text_frame("TSOT"))
     sort_artist = property(*Tag._friendly_text_frame("TSOP"))
     sort_album_artist = property(*Tag._friendly_text_frame("TSO2"))

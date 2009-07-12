@@ -4,6 +4,7 @@
 
 import abc
 import collections
+import imghdr
 from abc import abstractmethod
 from warnings import warn
 
@@ -156,6 +157,13 @@ class Frame(metaclass=abc.ABCMeta):
                 args.append("{0}={1!r}".format(spec.name, getattr(self, spec.name)))
         return "{0}({1})".format(stype, ", ".join(args))
 
+    def _spec(self, name):
+        "Return the named spec."
+        for s in self._framespec:
+            if s.name == name:
+                return s
+        raise ValueError("Unknown spec: " + name)
+
     def _str_fields(self):
         fields = []
         # Determine how many fields to show
@@ -164,7 +172,9 @@ class Frame(metaclass=abc.ABCMeta):
                      or not self._framespec[i]._optional 
                      or getattr(self, self._framespec[i].name, None) is not None)
         for spec in self._framespec[:cutoff + 1]:
-            fields.append(spec.to_str(getattr(self, spec.name, None)))
+            fields.append("{0}={1}"
+                          .format(spec.name, 
+                                  repr(spec.to_str(getattr(self, spec.name, None)))))
         return ", ".join(fields)
         
     def __str__(self):
@@ -259,6 +269,20 @@ class CreditsFrame(Frame):
                   MultiSpec("people",
                             EncodedStringSpec("involvement"),
                             EncodedStringSpec("person")))
+
+class PictureFrame(Frame):
+    def __init__(self, value=None, frameid=None, flags=None, frameno=None, **kwargs):
+        super().__init__(frameid=frameid, flags=flags, frameno=frameno, **kwargs)
+        if value is not None:
+            with open(value, "rb") as file:
+                self.data = file.read()
+                self.type = 0
+                self.desc = ""
+                self._set_format(imghdr.what(None, self.data[:32]))
+    
+    @abstractmethod
+    def _set_format(self, format):
+        pass
 
 def is_frame_class(cls):
     return (isinstance(cls, type)

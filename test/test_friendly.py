@@ -243,6 +243,54 @@ class FriendlyTestCase(unittest.TestCase):
         self.assertEqual(tag.date, "2009-07-12 18:01:23")
         self.assertEqual(tag[TDRC], TDRC(tag.date))
 
+    def testPicture22(self): 
+        tag = stagger.Tag22()
+            
+        # Check empty
+        self.assertEqual(tag.picture, "")
+
+        # Set to empty
+        tag.picture = ""
+        self.assertEqual(tag.picture, "")
+        self.assertTrue(PIC not in tag)
+
+        tag.picture = os.path.join(os.path.dirname(__file__), "samples", "cover.jpg")
+        self.assertEqual(tag[PIC][0].type, 0)
+        self.assertEqual(tag[PIC][0].desc, "")
+        self.assertEqual(tag[PIC][0].format, "JPG")
+        self.assertEqual(len(tag[PIC][0].data), 60511)
+        self.assertEqual(tag.picture, "Other(0)::<60511 bytes of jpeg data>")
+       
+        # Set to empty
+        tag.picture = ""
+        self.assertEqual(tag.picture, "")
+        self.assertTrue(PIC not in tag)
+
+
+    def testPicture23_24(self): 
+        for tagcls in stagger.Tag23, stagger.Tag24:
+            tag = tagcls()
+            
+            # Check empty
+            self.assertEqual(tag.picture, "")
+
+            # Set to empty
+            tag.picture = ""
+            self.assertEqual(tag.picture, "")
+            self.assertTrue(APIC not in tag)
+
+            tag.picture = os.path.join(os.path.dirname(__file__), "samples", "cover.jpg")
+            self.assertEqual(tag[APIC][0].type, 0)
+            self.assertEqual(tag[APIC][0].desc, "")
+            self.assertEqual(tag[APIC][0].mime, "image/jpeg")
+            self.assertEqual(len(tag[APIC][0].data), 60511)
+            self.assertEqual(tag.picture, "Other(0)::<60511 bytes of jpeg data>")
+
+            # Set to empty
+            tag.picture = ""
+            self.assertEqual(tag.picture, "")
+            self.assertTrue(APIC not in tag)
+
 suite = unittest.TestLoader().loadTestsFromTestCase(FriendlyTestCase)
 
 if __name__ == "__main__":

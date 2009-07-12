@@ -460,6 +460,28 @@ class SpecTestCase(unittest.TestCase):
         self.assertRaises(TypeError, spec.validate, frame, "1234")
         self.assertRaises(ValueError, spec.validate, frame, [1, 2, 3])
         self.assertRaises(ValueError, spec.validate, frame, [1, 2, 3, 4, 5])
+
+    def testPictureTypeSpec(self):
+        frame = TextFrame(frameid="TEST", encoding=3)
+        spec = PictureTypeSpec("test")
+        
+        # spec.read
+        self.assertEqual(spec.read(frame, b"\x01\x02"), (1, b"\x02"))
+        self.assertEqual(spec.read(frame, b"\x01"), (1, b""))
+        self.assertRaises(EOFError, spec.read, frame, b"")
+
+        # spec.write
+        self.assertEqual(spec.write(frame, 3), b"\x03")
+
+        # spec.validate
+        self.assertEqual(spec.validate(frame, 3), 3)
+        self.assertEqual(spec.validate(frame, "Front Cover"), 3)
+        self.assertEqual(spec.validate(frame, "front cover"), 3)
+        self.assertRaises(ValueError, spec.validate, frame, -1)
+        self.assertRaises(ValueError, spec.validate, frame, 21)
+        self.assertRaises(ValueError, spec.validate, frame, "foobar")
+        self.assertRaises(TypeError, spec.validate, frame, 1.5)
+
         
 suite = unittest.TestLoader().loadTestsFromTestCase(SpecTestCase)
 
