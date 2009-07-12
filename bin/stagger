@@ -167,7 +167,7 @@ try:
         for filename in args:
             try:
                 stagger.util.set_frames(filename, dict(options.set), **par)
-            except KeyError as e:
+            except (KeyError, ValueError) as e:
                 print(e.args[0], file=sys.stderr)
                 exit(1)
 
