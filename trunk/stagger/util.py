@@ -55,8 +55,9 @@ def set_frames(filename, valuedict, act=True, verbose=False):
     for (key, value) in valuedict.items():
         if key.lower() in tag._friendly_names:
             # Use friendly name API
-            setattr(tag, key.lower(), value)
-            newval = repr(getattr(tag, key.lower()))
+            key = key.lower().replace("-", "_")
+            setattr(tag, key, value)
+            newval = repr(getattr(tag, key))
         else:
             # Use frameid API
             tag[key] = value
