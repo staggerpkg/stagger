@@ -56,6 +56,7 @@ def set_frames(filename, valuedict, act=True, verbose=False):
         if key.lower() in tag._friendly_names:
             # Use friendly name API
             key = key.lower().replace("-", "_")
+            assert hasattr(tag, key)
             setattr(tag, key, value)
             newval = repr(getattr(tag, key))
         else:
