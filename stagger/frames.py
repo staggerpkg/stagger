@@ -278,7 +278,10 @@ class PictureFrame(Frame):
                 self.data = file.read()
                 self.type = 0
                 self.desc = ""
-                self._set_format(imghdr.what(None, self.data[:32]))
+                format = imghdr.what(None, self.data[:32])
+                if not format:
+                    format = value.rpartition(".")[2]
+                self._set_format(format)
     
     @abstractmethod
     def _set_format(self, format):
