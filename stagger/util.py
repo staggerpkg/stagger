@@ -1,5 +1,9 @@
 # Copyright (c) 2009, Karoly Lorentey  <karoly@lorentey.hu>
 
+import warnings
+import sys
+from contextlib import contextmanager
+
 import stagger
 
 def verb(verbose, *args, **kwargs):
@@ -82,3 +86,15 @@ def remove_frames(filename, frameids, act=True, verbose=False):
             verb(verbose, "{0}: {1}: not in file".format(filename, frameid))
     if act:
         tag.write(filename)
+
+@contextmanager
+def print_warnings(filename, options):
+    with warnings.catch_warnings(record=True) as ws:
+        try:
+            yield None
+        finally:
+            if not options.quiet and len(ws) > 0:
+                for w in ws:
+                    print(filename + ":warning: " + str(w.message),
+                          file=sys.stderr)
+            sys.stderr.flush()
