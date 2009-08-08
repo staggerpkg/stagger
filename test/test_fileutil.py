@@ -54,7 +54,11 @@ class FileutilTestCase(unittest.TestCase):
                 for i in range(40):
                     offset = random_offset(size)
                     length = random_length(size - offset)
-                    chunk = random_data(random_length())
+                    if random.randint(0, 6) == 0:
+                        chunk_length = length
+                    else:
+                        chunk_length = random_length()
+                    chunk = random_data(chunk_length)
                     #print("i={0} size={1} offset={2} length={3} chunk={4} in_place={5}"
                     #      .format(i, size, offset, length, len(chunk), in_place))
                     replace_both(data, filename, offset, length, chunk, in_place)

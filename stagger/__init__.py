@@ -13,3 +13,5 @@ from stagger.id3v1 import Tag1
 version = (0, 3, 0)
 
 default_tag = Tag24
+
+stagger.util.python_version_check()
