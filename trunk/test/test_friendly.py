@@ -279,6 +279,7 @@ class FriendlyTestCase(unittest.TestCase):
             self.assertEqual(tag.picture, "")
             self.assertTrue(APIC not in tag)
 
+            # Set picture.
             tag.picture = os.path.join(os.path.dirname(__file__), "samples", "cover.jpg")
             self.assertEqual(tag[APIC][0].type, 0)
             self.assertEqual(tag[APIC][0].desc, "")
@@ -291,6 +292,86 @@ class FriendlyTestCase(unittest.TestCase):
             self.assertEqual(tag.picture, "")
             self.assertTrue(APIC not in tag)
 
+    def testComment(self):
+        for tagcls, frameid in ((stagger.Tag22, COM), 
+                                (stagger.Tag23, COMM), 
+                                (stagger.Tag24, COMM)):
+            tag = tagcls()
+
+            # Comment should be the empty string in an empty tag.
+            self.assertEqual(tag.comment, "")
+
+            # Try to delete non-existent comment.
+            tag.comment = ""
+            self.assertEqual(tag.comment, "")
+            self.assertTrue(frameid not in tag)
+
+            # Set comment.
+            tag.comment = "Foobar"
+            self.assertEqual(tag.comment, "Foobar")
+            self.assertTrue(frameid in tag)
+            self.assertEqual(len(tag[frameid]), 1)
+            self.assertEqual(tag[frameid][0].lang, "eng")
+            self.assertEqual(tag[frameid][0].desc, "")
+            self.assertEqual(tag[frameid][0].text, "Foobar")
+            
+            # Override comment.
+            tag.comment = "Baz"
+            self.assertEqual(tag.comment, "Baz")
+            self.assertTrue(frameid in tag)
+            self.assertEqual(len(tag[frameid]), 1)
+            self.assertEqual(tag[frameid][0].lang, "eng")
+            self.assertEqual(tag[frameid][0].desc, "")
+            self.assertEqual(tag[frameid][0].text, "Baz")
+
+            # Delete comment.
+            tag.comment = ""
+            self.assertEqual(tag.comment, "")
+            self.assertTrue(frameid not in tag)
+
+    def testCommentWithExtraFrame(self):
+        "Test getting/setting the comment when other comments are present."
+
+        for tagcls, frameid in ((stagger.Tag22, COM), 
+                                (stagger.Tag23, COMM), 
+                                (stagger.Tag24, COMM)):
+            tag = tagcls()
+            frame = frameid(lan="eng", desc="foo", text="This is a text")
+            tag[frameid] = [frame]
+
+            # Comment should be the empty string.
+            self.assertEqual(tag.comment, "")
+
+            # Try to delete non-existent comment.
+            tag.comment = ""
+            self.assertEqual(tag.comment, "")
+            self.assertEqual(len(tag[frameid]), 1)
+
+            # Set comment.
+            tag.comment = "Foobar"
+            self.assertEqual(tag.comment, "Foobar")
+            self.assertEqual(len(tag[frameid]), 2)
+            self.assertEqual(tag[frameid][0], frame)
+            self.assertEqual(tag[frameid][1].lang, "eng")
+            self.assertEqual(tag[frameid][1].desc, "")
+            self.assertEqual(tag[frameid][1].text, "Foobar")
+            
+            # Override comment.
+            tag.comment = "Baz"
+            self.assertEqual(tag.comment, "Baz")
+            self.assertEqual(len(tag[frameid]), 2)
+            self.assertEqual(tag[frameid][0], frame)
+            self.assertEqual(tag[frameid][1].lang, "eng")
+            self.assertEqual(tag[frameid][1].desc, "")
+            self.assertEqual(tag[frameid][1].text, "Baz")
+
+            # Delete comment.
+            tag.comment = ""
+            self.assertEqual(tag.comment, "")
+            self.assertEqual(len(tag[frameid]), 1)
+            self.assertEqual(tag[frameid][0], frame)
+
+        
 suite = unittest.TestLoader().loadTestsFromTestCase(FriendlyTestCase)
 
 if __name__ == "__main__":

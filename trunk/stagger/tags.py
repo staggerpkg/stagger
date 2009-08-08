@@ -474,7 +474,7 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
         def getter(self):
             i = comment_frame_index(self)
             if i is None:
-                return None
+                return ""
             else:
                 return self[frameid][i].text
         def setter(self, value):
@@ -484,6 +484,8 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
                 del self._frames[frameid][i]
             if len(value) > 0:
                 frame = self.known_frames[frameid](lang="eng", desc="", text=value)
+                if frameid not in self._frames:
+                    self._frames[frameid] = []
                 self._frames[frameid].append(frame)
         return (getter, setter)
 
