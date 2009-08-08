@@ -265,7 +265,8 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
                         "disc", "disc-total",
                         "grouping", "composer", 
                         "genre", 
-                        # "comment", "compilation",
+                        "comment", 
+                        #"compilation",
                         "picture",
                         "sort-title", "sort-artist",
                         "sort-album-artist", "sort-album",
@@ -283,6 +284,7 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     disc_total = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     composer = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     genre = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
+    comment = abstractproperty(fget=lambda self: Non, fset=lambda self, value: None)
     grouping = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     picture = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     sort_title = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
@@ -450,6 +452,39 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
                 self[frameid] = [self.known_frames[frameid](value=value)]
             elif frameid in self:
                 del self[frameid]
+        return (getter, setter)
+
+    @classmethod
+    def _friendly_comment(cls, frameid):
+        def comment_frame_index(self):
+            if frameid not in self:
+                return None
+            # Return comment with lang="eng", desc="", if present.
+            # Otherwise return the first comment with no description,
+            # regardless of language.
+            icmt = None
+            for i in range(len(self[frameid])):
+                f = self[frameid][i]
+                if f.desc == "":
+                    if f.lang == "eng":
+                        return i
+                    if icmt is None:
+                        icmt = i
+            return icmt
+        def getter(self):
+            i = comment_frame_index(self)
+            if i is None:
+                return None
+            else:
+                return self[frameid][i].text
+        def setter(self, value):
+            assert isinstance(value, str)
+            i = comment_frame_index(self)
+            if i is not None:
+                del self._frames[frameid][i]
+            if len(value) > 0:
+                frame = self.known_frames[frameid](lang="eng", desc="", text=value)
+                self._frames[frameid].append(frame)
         return (getter, setter)
 
     # Misc
@@ -665,9 +700,9 @@ class Tag22(Tag):
     disc_total = property(*Tag._friendly_track_total("TPA", "disc"))
     composer = property(*Tag._friendly_text_frame("TCM"))
     genre = property(*Tag._friendly_text_frame("TCO"))
+    comment = property(*Tag._friendly_comment("COM"))
     grouping = property(*Tag._friendly_text_frame("TT1"))
     # TODO: compilation
-    # TODO: comment
     picture = property(*Tag._friendly_picture("PIC"))
     sort_title = property(*Tag._friendly_text_frame("TST"))
     sort_artist = property(*Tag._friendly_text_frame("TSP"))
@@ -789,9 +824,9 @@ class Tag23(Tag):
     disc_total = property(*Tag._friendly_track_total("TPOS", "disc"))
     composer = property(*Tag._friendly_text_frame("TCOM"))
     genre = property(*Tag._friendly_text_frame("TCON"))
+    comment = property(*Tag._friendly_comment("COMM"))
     grouping = property(*Tag._friendly_text_frame("TIT1"))
     # TODO: compilation
-    # TODO: comment
     picture = property(*Tag._friendly_picture("APIC"))
     sort_title = property(*Tag._friendly_text_frame("TSOT"))
     sort_artist = property(*Tag._friendly_text_frame("TSOP"))
@@ -972,9 +1007,9 @@ class Tag24(Tag):
     disc_total = property(*Tag._friendly_track_total("TPOS", "disc"))
     composer = property(*Tag._friendly_text_frame("TCOM"))
     genre = property(*Tag._friendly_text_frame("TCON"))
+    comment = property(*Tag._friendly_comment("COMM"))
     grouping = property(*Tag._friendly_text_frame("TIT1"))
     # TODO: compilation
-    # TODO: comment
     picture = property(*Tag._friendly_picture("APIC"))
     sort_title = property(*Tag._friendly_text_frame("TSOT"))
     sort_artist = property(*Tag._friendly_text_frame("TSOP"))
