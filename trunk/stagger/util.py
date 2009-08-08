@@ -6,6 +6,15 @@ from contextlib import contextmanager
 
 import stagger
 
+def python_version_check():
+    if sys.version_info[0:3] == (3, 1, 0):
+        print("There are data corruption issues with Python 3.1.0's io module; \n"
+              "please upgrade Python to at least 3.1.1 in order for Stagger \n"
+              "to work reliably.\n\n"
+              "For more information, see http://bugs.python.org/issue6629.", 
+              file=sys.stderr)
+        exit(2)
+
 def verb(verbose, *args, **kwargs):
     if verbose:
         print(*args, **kwargs)
