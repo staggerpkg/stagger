@@ -280,8 +280,12 @@ class EncodingSpec(ByteSpec):
         if 0 <= value <= 3:
             return value
         raise ValueError("Invalid encoding 0x{0:X}".format(value))
+
     def to_str(self, value):
-        return EncodedStringSpec._encodings[value][0]
+        if value is None:
+            return ""
+        else:
+            return EncodedStringSpec._encodings[value][0]
 
 class EncodedStringSpec(Spec):
     _encodings = (('latin-1', b"\x00"),
