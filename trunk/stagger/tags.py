@@ -549,7 +549,7 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
 
     def _decode_frame(self, frameid, bflags, data, frameno=None):
         try:
-            (flags, data) = self._interpret_frame_flags(bflags, data)
+            (flags, data) = self._interpret_frame_flags(frameid, bflags, data)
             if flags is None: 
                 flags = set()
             if frameid in self.known_frames:
@@ -580,7 +580,7 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     def _read_frames(self, file): pass
 
     @abstractmethod
-    def _interpret_frame_flags(self, bflags, data): pass
+    def _interpret_frame_flags(self, frameid, bflags, data): pass
 
 
     # Writing tags
@@ -739,7 +739,7 @@ class Tag22(Tag):
             data = fileutil.xread(ufile, size)
             yield (frameid, None, data)
 
-    def _interpret_frame_flags(self, bflags, data):
+    def _interpret_frame_flags(self, frameid, bflags, data):
         # No frame flags in v2.2
         return (None, data)
 
@@ -878,17 +878,17 @@ class Tag23(Tag):
             data = fileutil.xread(ufile, size)
             yield (frameid, bflags, data)
 
-    def _interpret_frame_flags(self, bflags, data):
+    def _interpret_frame_flags(self, frameid, bflags, data):
         flags = set()
         # Frame encoding flags
         if bflags & _FRAME23_FORMAT_UNKNOWN_MASK:
-            raise FrameError("Invalid ID3v2.3 frame encoding flags: 0x{0:X}".format(b))
+            raise FrameError("{0}: Invalid ID3v2.3 frame encoding flags: 0x{0:X}".format(frameid, bflags))
         if bflags & _FRAME23_FORMAT_COMPRESSED:
             flags.add("compressed")
             expanded_size = Int8.decode(data[0:4])
             data = zlib.decompress(data[4:], expanded_size)
         if bflags & _FRAME23_FORMAT_ENCRYPTED:
-            raise FrameError("Can't read ID3v2.3 encrypted frames")
+            raise FrameError("{0}: Can't read ID3v2.3 encrypted frames".format(frameid))
         if bflags & _FRAME23_FORMAT_GROUP:
             flags.add("group")
             flags.add("group={0}".format(data[0])) # Hack
@@ -901,7 +901,7 @@ class Tag23(Tag):
         if bflags & _FRAME23_STATUS_READ_ONLY:
             flags.add("read_only")
         if bflags & _FRAME23_STATUS_UNKNOWN_MASK:
-            warn("Unexpected ID3v2.3 frame status flags: 0x{1:X}".format(b), 
+            warn("{0}: Unexpected ID3v2.3 frame status flags: 0x{1:X}".format(frameid, bflags), 
                  TagWarning)
         return flags, data
 
@@ -1089,11 +1089,11 @@ class Tag24(Tag):
             data = fileutil.xread(file, size)
             yield (frameid, bflags, data)
 
-    def _interpret_frame_flags(self, bflags, data):
+    def _interpret_frame_flags(self, frameid, bflags, data):
         flags = set()
         # Frame format flags
         if bflags & _FRAME24_FORMAT_UNKNOWN_MASK:
-            raise FrameError("{0}: Unknown frame encoding flags: 0x{1:X}".format(frameid, b))
+            raise FrameError("{0}: Unknown frame encoding flags: 0x{1:X}".format(frameid, bflags))
         if bflags & _FRAME24_FORMAT_GROUP:
             flags.add("group")
             flags.add("group={0}".format(data[0])) # hack
@@ -1122,7 +1122,7 @@ class Tag24(Tag):
             flags.add("read_only")
         if bflags & _FRAME24_STATUS_UNKNOWN_MASK:
             warn("{0}: Unexpected status flags: 0x{1:X}"
-                 .format(frameid, b), FrameWarning)
+                 .format(frameid, bflags), FrameWarning)
         return flags, data
 
     def __encode_one_frame(self, frame):
