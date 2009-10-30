@@ -6,10 +6,29 @@ import io
 import random
 import tempfile
 import warnings
+import os
+import signal
 
 from stagger.fileutil import *
 
 class FileutilTestCase(unittest.TestCase):
+    def testSuppressInterrupt(self):
+        foo = 0
+        try:
+            with suppress_interrupt():
+                # Verify that KeyboardInterrupts are deferred
+                # until the end of this block.
+                foo += 1
+                os.kill(0, signal.SIGINT)  # Simulate C-c
+                foo += 1
+        except KeyboardInterrupt:
+            # This should be triggered, but only after the second increment.
+            foo += 1
+        except AttributeError:
+            # There is no os.kill on Windows: we can't test this feature there.
+            return
+        self.assertEqual(foo, 3, "Can't suppress interrupts")
+
     def testReplaceChunk(self):
         def compare(data, filename):
             with opened(filename, "rb") as file:
