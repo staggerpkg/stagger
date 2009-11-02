@@ -72,10 +72,12 @@ class Frame(metaclass=abc.ABCMeta):
             return frames
         else:
             if len(frames) > 1:
-                warn("{0}: Duplicate frame; only the last instance is kept"
+                # TODO: Research what iTunes does in this case
+                # Mutagen displays the first frame only.
+                warn("{0}: Duplicate frame; only the first instance is kept"
                      .format(frames[0].frameid),
                      DuplicateFrameWarning)
-            return frames[-1:]
+            return frames[0]
 
     @classmethod
     def _in_version(self, *versions):
@@ -254,7 +256,10 @@ class TextFrame(Frame):
                 enc = f.encoding
             elif enc != f.encoding:
                 enc = False
-            res.text.extend(f.text)
+            try:
+                res.text.extend(f.text)
+            except KeyError:  # f may be an ErrorFrame here.
+                pass
         if enc is not False:
             res.encoding = enc
         return [res]
