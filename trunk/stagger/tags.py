@@ -189,7 +189,7 @@ class FrameOrder:
         
 
 class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
-    known_frames = { }
+    known_frames = { }        # Maps known frameids to Frame class objects
 
     frame_order = None        # Initialized by stagger.id3
 
@@ -197,6 +197,37 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
         self.flags = set()
         self._frames = dict()
         self._filename = None
+
+    # Primary accessor (no magic)
+    def frames(self, key=None, orig_order=False):
+        """Returns a list of frames in this tag.
+        If KEY is None, returns all frames in the tag; otherwise returns all frames
+        whose frameid matches KEY.
+        
+        If ORIG_ORDER is True, then the frames are returned in their original order.
+        Otherwise the frames are sorted in canonical order according to the frame_order
+        field of this tag.
+        """
+        if key is not None:
+            # If there are multiple frames, then they are already in original order.
+            key = self._normalize_key(key)
+            if len(self._frames[key]) == 0:
+                raise KeyError("Key not found: " + repr(key))
+            return self._frames[key]
+        
+        frames = []
+        for frameid in self._frames.keys():
+            for frame in self._frames[frameid]:
+                frames.append(frame)
+        if orig_order:
+            key = (lambda frame: 
+                   (0, frame.frameno) 
+                   if frame.frameno is not None 
+                   else (1,))
+        else:
+            key = self.frame_order.key
+        frames.sort(key=key)
+        return frames
 
     # MutableMapping API
     def __iter__(self):
@@ -212,6 +243,12 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
                 and self._frames == other._frames)
 
     def _normalize_key(self, key, unknown_ok=True):
+        """Return the normalized version of KEY.
+        KEY may be a frameid (a string), or a Frame class object.
+        If KEY corresponds to a registered frameid, then that frameid is returned.
+        Otherwise, either KeyError is raised, or KEY is returned verbatim, 
+        depending on the value of UNKNOWN_OK.
+        """
         if Frames.is_frame_class(key):
             key = key.frameid
         if isinstance(key, str):
@@ -224,16 +261,23 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
                     raise KeyError("{0}: Unknown frame id".format(key))
         return key
 
+    # Mapping accessor (with extra magic, for convenience)
     def __getitem__(self, key):
         key = self._normalize_key(key)
-        if len(self._frames[key]) == 0:
-            raise KeyError("Key not found: " + repr(key))
-        if len(self._frames[key]) > 1:
-            return self._frames[key]
-        if key not in self.known_frames or self.known_frames[key]._allow_duplicates:
-            return self._frames[key]
-        else:
-            return self._frames[key][0]
+        fs = self.frames(key)
+        allow_duplicates = (key not in self.known_frames 
+                            or self.known_frames[key]._allow_duplicates)
+        if allow_duplicates:
+            return fs
+        if len(fs) > 1:
+            # Merge duplicates into one ephemeral frame, and return that.
+            # This may break users' expectations when they try to make changes
+            # to the attributes of the returned frame; however, I think 
+            # sometimes returning a list, sometimes a single frame for the same
+            # frame id would be even worse.
+            fs = fs[0]._merge(fs)
+        assert len(fs) == 1
+        return fs[0]
 
     def __setitem__(self, key, value):
         key = self._normalize_key(key, unknown_ok=False)
@@ -293,15 +337,19 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     sort_album = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     sort_composer = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
 
+    def __friendly_text_collect(self, frameid):
+        """Collect text values from all instances of FRAMEID into a single list.
+        Returns an empty list if there are no instances of FRAMEID with a text attribute.
+        """
+        try:
+            return self[frameid].text
+        except (KeyError, AttributeError):
+            return []
+        
     @classmethod
     def _friendly_text_frame(cls, frameid):
         def getter(self):
-            try:
-                frame = self[frameid]
-            except KeyError:
-                return ""
-            else:
-                return " / ".join(frame.text)
+            return " / ".join(self.__friendly_text_collect(frameid))
         def setter(self, value):
             if isinstance(value, str):
                 if len(value): 
@@ -317,14 +365,10 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     @classmethod
     def _friendly_track(cls, frameid, totalattr):
         def getter(self):
+            ts = self.__friendly_text_collect(frameid)
             try:
-                frame = self[frameid]
-            except KeyError:
-                return 0
-            (track, sep, total) = frame.text[0].partition("/")
-            try:
-                return int(track.strip())
-            except ValueError:
+                return int(ts[0].partition("/")[0])
+            except (ValueError, IndexError):
                 return 0
         def setter(self, value):
             value = int(value)
@@ -340,14 +384,10 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     @classmethod
     def _friendly_track_total(cls, frameid, trackattr):
         def getter(self):
+            ts = self.__friendly_text_collect(frameid)
             try:
-                frame = self[frameid]
-            except KeyError:
-                return 0
-            (track, sep, total) = frame.text[0].partition("/")
-            try:
-                return int(total.strip())
-            except ValueError:
+                return int(ts[0].partition("/")[2])
+            except (ValueError, IndexError):
                 return 0
         def setter(self, value):
             value = int(value)
@@ -394,24 +434,24 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
         
         # Parse year.
         try:
-            year = int(self[yearframe].text[0])
-        except (KeyError, ValueError):
+            year = int(self.__friendly_text_collect(yearframe)[0])
+        except (IndexError, ValueError):
             pass
         
         # Parse month and date.
         try:
-            date = self[dateframe].text[0]
+            date = self.__friendly_text_collect(dateframe)[0]
             m = re.match(r"\s*(?P<month>[01][0-9])\s*-?\s*(?P<day>[0-3][0-9])?\s*$", 
                          date)
             if m is not None:
                 month = int(m.group("month"))
                 day = int(m.group("day"))
-        except KeyError: 
+        except IndexError:
             pass
 
         # Parse time.
         try:
-            time = self[timeframe].text[0]
+            time = self.__friendly_text_collect(timeframe)[0]
             m = re.match(r"\s*(?P<hour>[0-2][0-9])\s*:?\s*"
                          "(?P<minute>[0-5][0-9])\s*:?\s*"
                          "(?P<second>[0-5][0-9])?\s*$", time)
@@ -420,7 +460,7 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
                 minute = int(m.group("minute"))
                 s = m.group("second")
                 second = int(s) if s is not None else None
-        except KeyError: 
+        except IndexError: 
             pass
         return (year, month, day, hour, minute, second)
 
@@ -490,23 +530,6 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
         return (getter, setter)
 
     # Misc
-    def frames(self, orig_order=False):
-        """Returns a list of frames in this tag, sorted according to frame_order.
-        """
-        frames = []
-        for frameid in self._frames.keys():
-            for frame in self._frames[frameid]:
-                frames.append(frame)
-        if orig_order:
-            key = (lambda frame: 
-                   (0, frame.frameno) 
-                   if frame.frameno is not None 
-                   else (1,))
-        else:
-            key = self.frame_order.key
-        frames.sort(key=key)
-        return frames
-
     def __repr__(self):
         return "<{0}: ID3v2.{1} tag{2} with {3} frames>".format(
             type(self).__name__,
