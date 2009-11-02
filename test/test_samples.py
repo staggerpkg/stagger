@@ -61,6 +61,30 @@ class SamplesTestCase(unittest.TestCase):
             if hasattr(module, "__warningregistry__"):
                 del module.__warningregistry__
 
+    def testIssue37(self):
+        # Check that duplicate frames are handled OK.
+
+        # The sample file contains two TALB frames ("quux" and "Foo").
+        # This is invalid according to the spec.
+
+        tag = stagger.read_tag(os.path.join(sample_dir, 
+                                            "24.issue37.stagger.duplicate-talb.id3"))
+        
+        # The friendly API should just concatenate the frames, as if they were
+        # a single multivalued text frame.
+        self.assertEqual(tag.album, "quux / Foo")
+
+        # Ditto for the magical dictionary API.
+        self.assertEqual(tag[TALB], TALB(encoding=0, text=["quux", "Foo"]))
+
+        # However, both getframes() and frames() should show two separate frames.
+        self.assertEqual(tag.frames(TALB), [TALB(encoding=0, text="quux"), 
+                                            TALB(encoding=0, text="Foo")])
+        self.assertEqual(tag.frames(orig_order=True), 
+                         [TIT2(encoding=0, text="Foobar"),
+                          TALB(encoding=0, text="quux"),
+                          TALB(encoding=0, text="Foo")])
+
 sample_dir = os.path.join(os.path.dirname(__file__), "samples")
 
 for file in list_id3(sample_dir):
