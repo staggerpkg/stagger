@@ -27,7 +27,7 @@ def check_tag_data(data):
         raise ValueError("Missing ID3 identifier")
     if data[3] >= 5 or data[4] != 0:
         raise ValueError("Unknown ID3 version")
-    length = stagger.conversions.Syncsafe.decode(data[6:10]) + 10
+    length = stagger.conversion.Syncsafe.decode(data[6:10]) + 10
     if len(data) != length:
         raise ValueError("Tag size mismatch")
     
