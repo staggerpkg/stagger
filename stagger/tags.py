@@ -874,7 +874,7 @@ class Tag23(Tag):
             warn("Unknown ID3v2.3 flags", TagWarning)
         self.size = Syncsafe.decode(header[6:10]) + 10
         if "extended_header" in self.flags:
-            self.__read_extended_header()
+            self.__read_extended_header(file)
 
     def __read_extended_header(self, file):
         (size, ext_flags, self.padding_size) = \
@@ -882,9 +882,16 @@ class Tag23(Tag):
         if size != 6 and size != 10:
             warn("Unexpected size of ID3v2.3 extended header: {0}".format(size), 
                  TagWarning)
-        if ext_flags & 128:
-            self.flags.add("ext:crc_present")
-            self.crc32 = struct.unpack("!I", fileutil.xread(file, 4))
+        if ext_flags & 32768:
+            if size < 10:
+                warn("Extended header is too short for a CRC field: {0} bytes instead of 10".format(size),
+                     TagWarning)
+            else:
+                self.flags.add("ext:crc_present")
+                (self.crc32,) = struct.unpack("!I", fileutil.xread(file, 4))
+                size -= 6
+        if size > 6:
+            fileutil.xread(file, size - 6)
 
     def _read_frames(self, file):
         if "unsynchronised" in self.flags:

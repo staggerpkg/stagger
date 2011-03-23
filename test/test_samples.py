@@ -36,13 +36,16 @@ def generate_test(file):
                     self.assertEqual(type(tag), prefix_to_class[prefix])
                     self.assertEqual(tag.version, int(prefix[1]))
 
+            if basename.endswith(".lossy.id3"):
+                # Don't try to match generated tag to original when stagger is 
+                # explicitly expected to modify the tag.
+                return
+
             # Scrub iTunes-produced invalid frames with frameids ending with space.
             # Stagger won't save these, so they would result in a tag mismatch below.
-            badfile = False
             for key in list(tag.keys()):
                 if key.endswith(" "):
                     del tag[key]
-                    badfile = True
 
             tag.padding_max = 0
             data = tag.encode()
@@ -60,6 +63,32 @@ class SamplesTestCase(unittest.TestCase):
         for module in stagger.tags, stagger.frames, stagger.id3, stagger.specs:
             if hasattr(module, "__warningregistry__"):
                 del module.__warningregistry__
+
+    def testID3v2ExtendedHeader(self):
+        # First sample simply includes an empty extended header.
+        tag1 = stagger.read_tag(os.path.join(sample_dir, 
+                                             "23.synthetic.empty-extended-header.lossy.id3"))
+        self.assertEqual(tag1.title, "The Millionaire's Holiday")
+        self.assertEqual(tag1.album, "Best Of Combustible Edison")
+        self.assertEqual(tag1.date, "1997")
+        self.assertEqual(tag1.track, 1)
+        self.assertEqual(tag1.genre, "Foobar")
+        self.assertEqual(tag1.artist, "Combustible Edison")
+        self.assertEqual(tag1.comment, " 0000132D 0000132D 00002FF0")
+        self.assertEqual(tag1.flags, { "extended_header" })
+
+        # Second sample file has an (invalid) CRC32 number in its extended header.
+        tag2 = stagger.read_tag(os.path.join(sample_dir, 
+                                             "23.synthetic.extended-header-bad-crc.lossy.id3"))
+        self.assertEqual(tag2.title, "The Millionaire's Holiday")
+        self.assertEqual(tag2.album, "Best Of Combustible Edison")
+        self.assertEqual(tag2.date, "1997")
+        self.assertEqual(tag2.track, 1)
+        self.assertEqual(tag2.genre, "Foobar")
+        self.assertEqual(tag2.artist, "Combustible Edison")
+        self.assertEqual(tag2.comment, " 0000132D 0000132D 00002FF0")
+        self.assertEqual(tag2.flags, { "ext:crc_present", "extended_header" })
+        self.assertEqual(tag2.crc32, 0x20202020)
 
     def testIssue37(self):
         # Check that duplicate frames are handled OK.
