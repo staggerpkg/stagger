@@ -6,24 +6,24 @@ import warnings
 
 import stagger
 
-import test_fileutil
-import test_conversion
-import test_specs
-import test_samples
-import test_tag
-import test_friendly
-import test_id3v1
-import test_id3v1_fileop
+import test.fileutil
+import test.conversion
+import test.specs
+import test.samples
+import test.tag
+import test.friendly
+import test.id3v1
+import test.id3v1_fileop
 
 suite = unittest.TestSuite()
-suite.addTest(test_fileutil.suite)
-suite.addTest(test_conversion.suite)
-suite.addTest(test_specs.suite)
-suite.addTest(test_samples.suite)
-suite.addTest(test_tag.suite)
-suite.addTest(test_friendly.suite)
-suite.addTest(test_id3v1.suite)
-suite.addTest(test_id3v1_fileop.suite)
+suite.addTest(test.fileutil.suite)
+suite.addTest(test.conversion.suite)
+suite.addTest(test.specs.suite)
+suite.addTest(test.samples.suite)
+suite.addTest(test.tag.suite)
+suite.addTest(test.friendly.suite)
+suite.addTest(test.id3v1.suite)
+suite.addTest(test.id3v1_fileop.suite)
 
 if __name__ == "__main__":
     warnings.simplefilter("always", stagger.Warning)
