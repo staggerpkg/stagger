@@ -36,6 +36,7 @@ import re
 import collections
 import io
 import imghdr
+import zlib
 
 from abc import abstractmethod, abstractproperty
 from warnings import warn
@@ -946,7 +947,7 @@ class Tag23(Tag):
         if bflags & _FRAME23_FORMAT_COMPRESSED:
             flags.add("compressed")
             expanded_size = Int8.decode(data[0:4])
-            data = zlib.decompress(data[4:], expanded_size)
+            data = zlib.decompress(data[4:])
         if bflags & _FRAME23_FORMAT_ENCRYPTED:
             raise FrameError("{0}: Can't read ID3v2.3 encrypted frames".format(frameid))
         if bflags & _FRAME23_FORMAT_GROUP:
@@ -1197,7 +1198,7 @@ class Tag24(Tag):
         if "unsynchronised" in self.flags:
             data = Unsync.decode(data)
         if "compressed" in self.flags:
-            data = zlib.decompress(data, expanded_size)
+            data = zlib.decompress(data)
         # Frame status flags
         if bflags & _FRAME24_STATUS_DISCARD_ON_TAG_ALTER:
             flags.add("discard_on_tag_alter")
