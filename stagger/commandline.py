@@ -223,7 +223,7 @@ def main():
                     except stagger.NoTagError:
                         print(filename + ":error: No tag", file=sys.stderr)
                     except stagger.Error as e:
-                        print(filename + ":error: " + ", ".join(e.args[0]), 
+                        print(filename + ":error: " + ", ".join(e.args), 
                               file=sys.stderr)
                     if tag:
                         if options.frameid:
