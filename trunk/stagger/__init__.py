@@ -40,7 +40,7 @@ from stagger.frames import Frame, ErrorFrame, UnknownFrame, TextFrame, URLFrame
 from stagger.tags import read_tag, decode_tag, delete_tag, Tag22, Tag23, Tag24
 from stagger.id3v1 import Tag1
 
-version = (0, 4, 0)
+version = (0, 4, 1)
 versionstr = ".".join((str(v) for v in version))
 
 default_tag = Tag24
