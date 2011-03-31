@@ -197,8 +197,8 @@ def main():
                 with stagger.util.print_warnings(filename, options):
                     try:
                         stagger.util.set_frames(filename, dict(options.set), **par)
-                        sys.stdout.flush()
                         sys.stderr.flush()
+                        sys.stdout.flush()
                     except (KeyError, ValueError) as e:
                         print(e.args[0], file=sys.stderr)
                         exit(1)
@@ -207,8 +207,8 @@ def main():
             for filename in args:
                 with stagger.util.print_warnings(filename, options):
                     stagger.util.remove_frames(filename, options.remove, **par)
-                    sys.stdout.flush()
                     sys.stderr.flush()
+                    sys.stdout.flush()
     
         else: # print
             for filename in args:
@@ -218,13 +218,15 @@ def main():
                         tag = stagger.read_tag(filename)
                         print("{0}: ID3v2.{1} tag with {2} frames"
                               .format(filename, tag.version, len(tag)))
-                        sys.stdout.flush()
                         sys.stderr.flush()
+                        sys.stdout.flush()
                     except stagger.NoTagError:
                         print(filename + ":error: No tag", file=sys.stderr)
-                    except stagger.Error as e:
+                    except (stagger.Error, EOFError) as e:
                         print(filename + ":error: " + ", ".join(e.args), 
                               file=sys.stderr)
+
+                with stagger.util.print_warnings(filename, options):
                     if tag:
                         if options.frameid:
                             for frame in tag.frames():
@@ -235,8 +237,8 @@ def main():
                                 if val:
                                     print("{0:>18}: {1}".format(name.title(), val))
                         print()
-                    sys.stdout.flush()
                     sys.stderr.flush()
+                    sys.stdout.flush()
     
     except IOError as e:
         print("{0}: {1}".format(e.filename, e.strerror), file=sys.stderr)
