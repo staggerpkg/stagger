@@ -396,10 +396,19 @@ class MultiSpec(Spec):
         seq = []
         while data:
             record = []
-            for s in self.specs:
-                elem, data = s.read(frame, data)
-                record.append(elem)
-            seq.append(tuple(record))
+            origdata = data
+            try:
+                for s in self.specs:
+                    elem, data = s.read(frame, data)
+                    record.append(elem)
+                seq.append(tuple(record))
+            except (EOFError, ValueError):
+                if len(seq) == 0:
+                    raise
+                warn("Frame {0} has {1} bytes of junk at end".format(frame.frameid, len(origdata)), 
+                     FrameWarning)
+                frame.junkdata = origdata
+                data = b''
         return seq, data
 
     def write(self, frame, values):
