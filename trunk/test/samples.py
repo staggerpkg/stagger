@@ -41,10 +41,13 @@ def generate_test(file):
                 # explicitly expected to modify the tag.
                 return
 
-            # Scrub iTunes-produced invalid frames with frameids ending with space.
+
+            # Scrub known invalid frames.
             # Stagger won't save these, so they would result in a tag mismatch below.
             for key in list(tag.keys()):
-                if key.endswith(" "):
+                if key.endswith(" "): # iTunes
+                    del tag[key]
+                if tag.version == 4 and key == "XSOP": # MusicBrainz
                     del tag[key]
 
             tag.padding_max = 0
