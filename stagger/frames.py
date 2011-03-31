@@ -132,10 +132,10 @@ class Frame(metaclass=abc.ABCMeta):
                                      "to ID3v2.{1} format".format(self.frameid, version))
 
     def _encode(self, encodings=("latin-1", "utf-16")):
-        if getattr(self, "_bozo", False):
-            warn("{0}: Frame type is not widely implemented, "
-                 "its use is discouraged".format(self.frameid), 
-                 BozoFrameWarning)
+        # if getattr(self, "_bozo", False):
+        #     warn("{0}: Frame type is not widely implemented, "
+        #          "its use is discouraged".format(self.frameid), 
+        #          BozoFrameWarning)
         
         def encode_fields():
             data = bytearray()
