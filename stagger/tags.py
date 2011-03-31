@@ -1150,7 +1150,7 @@ class Tag24(Tag):
         # to read them in non-syncsafe mode setting the ITUNES_WORKAROUND
         # class attribute to True and let stagger reencode your tags. (Stagger
         # will never produce a 2.4 tag with non-syncsafe frame lengths.)        
-        if syncsafe_workaround == None:
+        if syncsafe_workaround is None:
             syncsafe_workaround = self.ITUNES_WORKAROUND
         origfpos = file.tell()
         frames = []
