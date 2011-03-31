@@ -222,9 +222,11 @@ def main():
                         sys.stdout.flush()
                     except stagger.NoTagError:
                         print(filename + ":error: No tag", file=sys.stderr)
-                    except (stagger.Error, EOFError) as e:
+                    except stagger.Error as e:
                         print(filename + ":error: " + ", ".join(e.args), 
                               file=sys.stderr)
+                    except EOFError:
+                        print(filename + ":error: End of file while reading tag")
 
                 with stagger.util.print_warnings(filename, options):
                     if tag:
