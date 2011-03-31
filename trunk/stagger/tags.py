@@ -1101,23 +1101,48 @@ class Tag24(Tag):
             self.flags.add("ext:restrictions")
             (self.restrictions, data) = self.__read_extended_header_flag_data(data)
 
-    def _read_frames(self, file):
+    def _read_frames(self, file, syncsafe_workaround = None):
+        # Older versions of iTunes stored frame sizes as straight 8bit integers,
+        # not syncsafe values as the spec requires.
+        # (The bug is known to be fixed in iTunes 8.2.)
+        #
+        # To work around such an erroneous encoding, we re-read the entire tag 
+        # in non-syncsafe mode when we detect a frame with a bad size.
+        # This heuristic does not detect all badly encoded tags; 
+        # it fails when the 8-bit frame size happens to be in syncsafe format.
+        #
+        # We could improve detection by parsing the tag both ways and see which 
+        # interpretation produces more frames. However, the extra effort doesn't
+        # seem worthwhile to do by default.
+        #
+        # If you have many files with iTunes-encoded tags, you can force stagger
+        # to read them in non-syncsafe mode setting the ITUNES_WORKAROUND
+        # class attribute to True and let stagger reencode your tags. (Stagger
+        # will never produce a 2.4 tag with non-syncsafe frame lengths.)        
+        if syncsafe_workaround == None:
+            syncsafe_workaround = self.ITUNES_WORKAROUND
+        origfpos = file.tell()
+        frames = []
         while file.tell() < self.offset + self.size:
             header = fileutil.xread(file, 10)
             if not self._is_frame_id(header[0:4]):
                 break
             frameid = header[0:4].decode("ASCII")
-            if self.ITUNES_WORKAROUND:
-                # Work around iTunes frame size encoding bug.
-                # Older versions of iTunes stored frame sizes as
-                # straight 8bit integers, not syncsafe. 
-                # (This is known to be fixed in iTunes 8.2.)
+            if syncsafe_workaround:
                 size = Int8.decode(header[4:8])
             else:
-                size = Syncsafe.decode(header[4:8])
+                try:
+                    size = Syncsafe.decode(header[4:8])
+                except ValueError:
+                    if syncsafe_workaround:
+                        raise
+                    warn("Invalid syncsafe frame size; switching to 8-bit mode")
+                    file.seek(origfpos)
+                    return self._read_frames(file, True)
             bflags = Int8.decode(header[8:10])
             data = fileutil.xread(file, size)
-            yield (frameid, bflags, data)
+            frames.append((frameid, bflags, data))
+        return frames
 
     def _interpret_frame_flags(self, frameid, bflags, data):
         flags = set()
