@@ -350,7 +350,6 @@ class SYLT(Frame):
                   MultiSpec("data", EncodedFullTextSpec("text"), 
                             IntegerSpec("timestamp", 32)))
     _allow_duplicates = True
-    _untested = True
     _bozo = True
 
 @frameclass
@@ -639,8 +638,6 @@ class IPLS(CreditsFrame):
     """Involved people list
     Replaced by TMCL and TIPL in id3v2.4
     """
-    _framespec = (BinaryDataSpec("data"),)
-    _untested = True
     _bozo = True
     _version = 3
 
