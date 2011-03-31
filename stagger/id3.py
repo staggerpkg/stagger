@@ -928,6 +928,32 @@ class TSOC(TextFrame):
 @frameclass
 class TSC(TSOC): pass
 
+@frameclass
+class NCON(Frame):
+    """MusicMatch data"""
+    _framespec = (BinaryDataSpec("data"),)
+    _nonstandard = True
+
+@frameclass
+class RGAD(Frame):
+    """Replay Gain Adjustment"""
+    # http://replaygain.hydrogenaudio.org/file_format_id3v2.html
+    _framespec = (IntegerSpec("peak", 32), 
+                  IntegerSpec("radio", 16), 
+                  IntegerSpec("audiophile", 16))
+    _nonstandard = True
+
+@frameclass
+class TTSE(TextFrame):
+    """Lame encoder command line"""
+    _nonstandard = True
+
+@frameclass
+class XSOP(TextFrame):
+    """MusicBrainz Artist Sortname"""
+    _nonstandard = True
+    _version = 3
+
 # ID3v1 genre list
 genres = (
     "Blues", "Classic Rock", "Country", "Dance", "Disco", "Funk", "Grunge",
