@@ -57,6 +57,9 @@ class FileutilTestCase(unittest.TestCase):
         except AttributeError:
             # There is no os.kill on Windows: we can't test this feature there.
             return
+        except WindowsError:
+            # Ditto
+            return
         self.assertEqual(foo, 3, "Can't suppress interrupts")
 
     def testReplaceChunk(self):
