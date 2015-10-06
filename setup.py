@@ -3,7 +3,7 @@
 # setup.py
 # From the stagger project: http://code.google.com/p/stagger/
 #
-# Copyright (c) 2009-2011 Karoly Lorentey  <karoly@lorentey.hu>
+# Copyright (c) 2009-2015 Karoly Lorentey  <karoly@lorentey.hu>
 # All rights reserved.
 # 
 # Redistribution and use in source and binary forms, with or without
@@ -31,10 +31,7 @@
 # ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
   
-import distribute_setup
-distribute_setup.use_setuptools()
-
-from setuptools import setup;
+from setuptools import setup
 
 setup(
     name="stagger",
