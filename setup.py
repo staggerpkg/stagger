@@ -35,8 +35,8 @@ from setuptools import setup
 
 setup(
     name="stagger",
-    version="0.4.2",
-    url="http://code.google.com/p/stagger",
+    version="1.0.0",
+    url="http://github.com/lorentey/stagger",
     author="Karoly Lorentey",
     author_email="karoly@lorentey.hu",
     packages=["stagger"],
@@ -54,7 +54,7 @@ that is able to handle all the various badly formatted tags out there
 and allow you to convert them to a consensus format.
 """,
     classifiers=[
-        "Development Status :: 4 - Beta",
+        "Development Status :: 5 - Production/Stable",
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: BSD License",
         "Operating System :: OS Independent",
