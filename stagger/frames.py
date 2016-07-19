@@ -107,7 +107,7 @@ class Frame(metaclass=abc.ABCMeta):
                 warn("{0}: Duplicate frame; only the first instance is kept"
                      .format(frames[0].frameid),
                      DuplicateFrameWarning)
-            return frames[0]
+            return frames[0:1]
 
     @classmethod
     def _in_version(self, *versions):
