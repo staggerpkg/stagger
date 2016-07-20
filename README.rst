@@ -1,5 +1,8 @@
 Stagger is an ID3v1/ID3v2 tag manipulation package written in pure Python 3.
 
+.. image:: https://travis-ci.org/lorentey/stagger.svg?branch=master
+    :target: https://travis-ci.org/lorentey/stagger
+
 The ID3v2 tag format is notorious for its useless specification documents and its quirky, mutually incompatible part-implementations. Stagger is to provide a robust tagging package that is able to handle all the various badly formatted tags out there and allow you to convert them to a consensus format.
 
 The package has a stable API and has been used in production for several years.
