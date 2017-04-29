@@ -26,7 +26,7 @@ Features currently implemented:
 ::
 
     >>> import stagger
-    >>> form stagger.id3 import *       # contains ID3 frame types
+    >>> from stagger.id3 import *       # contains ID3 frame types
     
     >>> tag = stagger.read_tag("track01.mp3")          
     
