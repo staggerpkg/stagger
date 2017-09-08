@@ -45,6 +45,7 @@ from contextlib import contextmanager
 from stagger.errors import *
 from stagger.conversion import *
 
+import stagger.const as const
 import stagger.frames as Frames
 import stagger.fileutil as fileutil
 
@@ -220,9 +221,10 @@ class FrameOrder:
         
 
 class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
-    known_frames = { }        # Maps known frameids to Frame class objects
+    known_frames = {}        # Maps known frameids to Frame class objects
 
     frame_order = None        # Initialized by stagger.id3
+    _genre_tag_name = None     # used by genre property in different subclasses
 
     def __init__(self):
         self.flags = set()
@@ -506,6 +508,12 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
             res.append("{0:{1}}".format(fields[i], formats[i]))
         return "".join(res)
 
+    def _get_genre(self, genreframe):
+        try:
+            return self.__friendly_text_collect(genreframe)[0]
+        except IndexError:
+            return ''
+
     @classmethod
     def _friendly_picture(cls, frameid):
         def getter(self):
@@ -717,11 +725,28 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
         newframes.sort(key=self.frame_order.key)
         return newframes
 
+    @property
+    def genre(self):
+        try:
+            gen = self.__friendly_text_collect(self._genre_tag_name)[0]
+            try:
+                match = const.GENRE_PAT.findall(gen)[0]   # extract the number
+                return const.GENRES[int(match)]   # return the name of the genre
+            except IndexError:
+                return gen   # genre is not in the form of '(number)' or number is beyond 191
+        except IndexError:
+            # tag hasn't been created yet
+            return ''
 
-        
+    @genre.setter
+    def genre(self, value):
+        self._friendly_text_frame(self._genre_tag_name)[1](self, value)
+
+
 class Tag22(Tag):
     version = 2
     encodings = ("latin-1", "utf-16")
+    _genre_tag_name = "TCO"
 
     def __init__(self):
         super().__init__()
@@ -755,7 +780,6 @@ class Tag22(Tag):
     disc = property(*Tag._friendly_track("TPA", "disc_total"))
     disc_total = property(*Tag._friendly_track_total("TPA", "disc"))
     composer = property(*Tag._friendly_text_frame("TCM"))
-    genre = property(*Tag._friendly_text_frame("TCO"))
     comment = property(*Tag._friendly_comment("COM"))
     grouping = property(*Tag._friendly_text_frame("TT1"))
     # TODO: compilation
@@ -846,6 +870,7 @@ class Tag22(Tag):
 class Tag23(Tag):
     version = 3
     encodings = ("latin-1", "utf-16")
+    _genre_tag_name = "TCON"
 
     def __init__(self):
         super().__init__()
@@ -879,7 +904,6 @@ class Tag23(Tag):
     disc = property(*Tag._friendly_track("TPOS", "disc_total"))
     disc_total = property(*Tag._friendly_track_total("TPOS", "disc"))
     composer = property(*Tag._friendly_text_frame("TCOM"))
-    genre = property(*Tag._friendly_text_frame("TCON"))
     comment = property(*Tag._friendly_comment("COMM"))
     grouping = property(*Tag._friendly_text_frame("TIT1"))
     # TODO: compilation
@@ -1036,6 +1060,7 @@ class Tag24(Tag):
 
     version = 4
     encodings = ("latin-1", "utf-8")
+    _genre_tag_name = "TCON"
 
     def __init__(self):
         super().__init__()
@@ -1069,7 +1094,6 @@ class Tag24(Tag):
     disc = property(*Tag._friendly_track("TPOS", "disc_total"))
     disc_total = property(*Tag._friendly_track_total("TPOS", "disc"))
     composer = property(*Tag._friendly_text_frame("TCOM"))
-    genre = property(*Tag._friendly_text_frame("TCON"))
     comment = property(*Tag._friendly_comment("COMM"))
     grouping = property(*Tag._friendly_text_frame("TIT1"))
     # TODO: compilation
