@@ -361,7 +361,7 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     disc_total = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     composer = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     genre = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
-    comment = abstractproperty(fget=lambda self: Non, fset=lambda self, value: None)
+    comment = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     grouping = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     picture = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     sort_title = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
@@ -507,12 +507,6 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
             res.append(seps[i])
             res.append("{0:{1}}".format(fields[i], formats[i]))
         return "".join(res)
-
-    def _get_genre(self, genreframe):
-        try:
-            return self.__friendly_text_collect(genreframe)[0]
-        except IndexError:
-            return ''
 
     @classmethod
     def _friendly_picture(cls, frameid):
@@ -727,16 +721,16 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
 
     @property
     def genre(self):
-        try:
-            gen = self.__friendly_text_collect(self._genre_tag_name)[0]
+        gen = ' / '.join(self.__friendly_text_collect(self._genre_tag_name))
+        match_list = const.GENRE_PAT.findall(gen)   # extract the number
+        for match in match_list:
             try:
-                match = const.GENRE_PAT.findall(gen)[0]   # extract the number
-                return const.GENRES[int(match)]   # return the name of the genre
+                # replace all possible numbers with corresponding genres
+                gen = gen.replace('(' + match + ')', const.GENRES[int(match)])
             except IndexError:
-                return gen   # genre is not in the form of '(number)' or number is beyond 191
-        except IndexError:
-            # tag hasn't been created yet
-            return ''
+                pass
+        return gen
+
 
     @genre.setter
     def genre(self, value):
