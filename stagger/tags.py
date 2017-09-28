@@ -224,7 +224,6 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     known_frames = {}        # Maps known frameids to Frame class objects
 
     frame_order = None        # Initialized by stagger.id3
-    _genre_tag_name = None     # used by genre property in different subclasses
 
     def __init__(self):
         self.flags = set()
@@ -562,6 +561,22 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
                 self._frames[frameid].append(frame)
         return (getter, setter)
 
+    @classmethod
+    def _friendly_genre(cls, frameid):
+        def getter(self):
+            gen = ' / '.join(self.__friendly_text_collect(frameid))
+            match_list = const.GENRE_PAT.findall(gen)   # extract the number
+            for match in match_list:
+                try:
+                    # replace all possible numbers with corresponding genres
+                    gen = gen.replace('(' + match + ')', const.GENRES[int(match)])
+                except IndexError:
+                    pass
+            return gen
+        def setter(self, value):
+            self._friendly_text_frame(frameid)[1](self, value)
+        return (getter, setter)
+
     # Misc
     def __repr__(self):
         return "<{0}: ID3v2.{1} tag{2} with {3} frames>".format(
@@ -719,28 +734,10 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
         newframes.sort(key=self.frame_order.key)
         return newframes
 
-    @property
-    def genre(self):
-        gen = ' / '.join(self.__friendly_text_collect(self._genre_tag_name))
-        match_list = const.GENRE_PAT.findall(gen)   # extract the number
-        for match in match_list:
-            try:
-                # replace all possible numbers with corresponding genres
-                gen = gen.replace('(' + match + ')', const.GENRES[int(match)])
-            except IndexError:
-                pass
-        return gen
-
-
-    @genre.setter
-    def genre(self, value):
-        self._friendly_text_frame(self._genre_tag_name)[1](self, value)
-
 
 class Tag22(Tag):
     version = 2
     encodings = ("latin-1", "utf-16")
-    _genre_tag_name = "TCO"
 
     def __init__(self):
         super().__init__()
@@ -769,6 +766,7 @@ class Tag22(Tag):
 
     album_artist = property(*Tag._friendly_text_frame("TP2"))
     album = property(*Tag._friendly_text_frame("TAL"))
+    genre = property(*Tag._friendly_genre("TCO"))
     track = property(*Tag._friendly_track("TRK", "track_total"))
     track_total = property(*Tag._friendly_track_total("TRK", "track"))
     disc = property(*Tag._friendly_track("TPA", "disc_total"))
@@ -864,7 +862,6 @@ class Tag22(Tag):
 class Tag23(Tag):
     version = 3
     encodings = ("latin-1", "utf-16")
-    _genre_tag_name = "TCON"
 
     def __init__(self):
         super().__init__()
@@ -894,6 +891,7 @@ class Tag23(Tag):
     album_artist = property(*Tag._friendly_text_frame("TPE2"))
     album = property(*Tag._friendly_text_frame("TALB"))
     track = property(*Tag._friendly_track("TRCK", "track_total"))
+    genre = property(*Tag._friendly_genre("TCON"))
     track_total = property(*Tag._friendly_track_total("TRCK", "track"))
     disc = property(*Tag._friendly_track("TPOS", "disc_total"))
     disc_total = property(*Tag._friendly_track_total("TPOS", "disc"))
@@ -1054,7 +1052,6 @@ class Tag24(Tag):
 
     version = 4
     encodings = ("latin-1", "utf-8")
-    _genre_tag_name = "TCON"
 
     def __init__(self):
         super().__init__()
@@ -1083,6 +1080,7 @@ class Tag24(Tag):
 
     album = property(*Tag._friendly_text_frame("TALB"))
     album_artist = property(*Tag._friendly_text_frame("TPE2"))
+    genre = property(*Tag._friendly_genre("TCON"))
     track = property(*Tag._friendly_track("TRCK", "track_total"))
     track_total = property(*Tag._friendly_track_total("TRCK", "track"))
     disc = property(*Tag._friendly_track("TPOS", "disc_total"))
