@@ -472,7 +472,7 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
         # Parse month and date.
         try:
             date = self.__friendly_text_collect(dateframe)[0]
-            m = re.match(r"\s*(?P<month>[01][0-9])\s*-?\s*(?P<day>[0-3][0-9])?\s*$", 
+            m = re.match(r"\s*(?P<day>[0-3][0-9])\s*-?\s*(?P<month>[01][0-9])?\s*$",            
                          date)
             if m is not None:
                 month = int(m.group("month"))
