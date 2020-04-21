@@ -359,7 +359,7 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
     disc_total = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     composer = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     genre = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
-    comment = abstractproperty(fget=lambda self: Non, fset=lambda self, value: None)
+    comment = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     grouping = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     picture = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
     sort_title = abstractproperty(fget=lambda self: None, fset=lambda self, value: None)
