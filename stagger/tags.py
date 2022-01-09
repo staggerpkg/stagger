@@ -219,7 +219,12 @@ class FrameOrder:
         return "<FrameOrder: {0}>".format(", ".join(pair[0] for pair in order))
         
 
-class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
+try:
+    from collections import MutableMapping
+except ImportError:
+    from collections.abc import MutableMapping
+
+class Tag(MutableMapping, metaclass=abc.ABCMeta):
     known_frames = { }        # Maps known frameids to Frame class objects
 
     frame_order = None        # Initialized by stagger.id3
