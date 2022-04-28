@@ -219,7 +219,17 @@ class FrameOrder:
         return "<FrameOrder: {0}>".format(", ".join(pair[0] for pair in order))
         
 
-class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
+try:
+    from collections import MutableMapping
+except ImportError:
+    from collections.abc import MutableMapping
+
+try:
+    from collections import Iterable
+except ImportError:
+    from collections.abc import Iterable
+    
+class Tag(MutableMapping, metaclass=abc.ABCMeta):
     known_frames = { }        # Maps known frameids to Frame class objects
 
     frame_order = None        # Initialized by stagger.id3
@@ -316,7 +326,7 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
             self._frames[key] = [value]
             return
         if self.known_frames[key]._allow_duplicates:
-            if not isinstance(value, collections.Iterable) or isinstance(value, str):
+            if not isinstance(value, Iterable) or isinstance(value, str):
                 raise ValueError("{0} requires a list of frame values".format(key))
             self._frames[key] = [val if isinstance(val, self.known_frames[key])
                                  else self.known_frames[key](val) 
