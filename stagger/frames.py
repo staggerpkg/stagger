@@ -43,8 +43,10 @@ from stagger.specs import *
 
 try:
     from collections import Container
+    from collections import Iterable
 except ImportError:
     from collections.abc import Container
+    from collections.abc import Iterable
 
 class Frame(metaclass=abc.ABCMeta):
     _framespec = tuple()
@@ -249,7 +251,7 @@ class TextFrame(Frame):
                 return
             if isinstance(values, str):
                 yield values
-            elif isinstance(values, collections.Iterable):
+            elif isinstance(values, Iterable):
                 for val in values:
                     for v in extract_strs(val):
                         yield v
