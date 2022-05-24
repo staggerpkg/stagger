@@ -48,6 +48,11 @@ from stagger.conversion import *
 import stagger.frames as Frames
 import stagger.fileutil as fileutil
 
+try:
+    from collections import MutableMapping
+except ImportError:
+    from collections.abc import MutableMapping
+
 _FRAME23_FORMAT_COMPRESSED = 0x0080
 _FRAME23_FORMAT_ENCRYPTED = 0x0040
 _FRAME23_FORMAT_GROUP = 0x0020
@@ -218,11 +223,6 @@ class FrameOrder:
         order.sort(key=lambda pair: pair[1])
         return "<FrameOrder: {0}>".format(", ".join(pair[0] for pair in order))
         
-
-try:
-    from collections import MutableMapping
-except ImportError:
-    from collections.abc import MutableMapping
 
 class Tag(MutableMapping, metaclass=abc.ABCMeta):
     known_frames = { }        # Maps known frameids to Frame class objects
