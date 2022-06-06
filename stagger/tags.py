@@ -50,8 +50,10 @@ import stagger.fileutil as fileutil
 
 try:
     from collections import MutableMapping
+    from collections import Iterable
 except ImportError:
     from collections.abc import MutableMapping
+    from collections.abc import Iterable
 
 _FRAME23_FORMAT_COMPRESSED = 0x0080
 _FRAME23_FORMAT_ENCRYPTED = 0x0040
@@ -321,7 +323,7 @@ class Tag(MutableMapping, metaclass=abc.ABCMeta):
             self._frames[key] = [value]
             return
         if self.known_frames[key]._allow_duplicates:
-            if not isinstance(value, collections.Iterable) or isinstance(value, str):
+            if not isinstance(value, Iterable) or isinstance(value, str):
                 raise ValueError("{0} requires a list of frame values".format(key))
             self._frames[key] = [val if isinstance(val, self.known_frames[key])
                                  else self.known_frames[key](val) 
