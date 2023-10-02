@@ -491,8 +491,8 @@ class Tag(MutableMapping, metaclass=abc.ABCMeta):
         try:
             time = self.__friendly_text_collect(timeframe)[0]
             m = re.match(r"\s*(?P<hour>[0-2][0-9])\s*:?\s*"
-                         "(?P<minute>[0-5][0-9])\s*:?\s*"
-                         "(?P<second>[0-5][0-9])?\s*$", time)
+                         r"(?P<minute>[0-5][0-9])\s*:?\s*"
+                         r"(?P<second>[0-5][0-9])?\s*$", time)
             if m is not None:
                 hour = int(m.group("hour"))
                 minute = int(m.group("minute"))
