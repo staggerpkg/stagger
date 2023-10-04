@@ -41,6 +41,13 @@ from warnings import warn
 from stagger.errors import *
 from stagger.specs import *
 
+try:
+    from collections import Container
+    from collections import Iterable
+except ImportError:
+    from collections.abc import Container
+    from collections.abc import Iterable
+
 class Frame(metaclass=abc.ABCMeta):
     _framespec = tuple()
     _version = tuple()
@@ -114,7 +121,7 @@ class Frame(metaclass=abc.ABCMeta):
         "Returns true if this frame is in any of the specified versions of ID3."
         for version in versions:
             if (self._version == version
-                or (isinstance(self._version, collections.Container) 
+                or (isinstance(self._version, Container)
                     and version in self._version)):
                 return True
         return False
@@ -244,7 +251,7 @@ class TextFrame(Frame):
                 return
             if isinstance(values, str):
                 yield values
-            elif isinstance(values, collections.Iterable):
+            elif isinstance(values, Iterable):
                 for val in values:
                     for v in extract_strs(val):
                         yield v

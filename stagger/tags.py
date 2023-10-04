@@ -48,6 +48,13 @@ from stagger.conversion import *
 import stagger.frames as Frames
 import stagger.fileutil as fileutil
 
+try:
+    from collections import MutableMapping
+    from collections import Iterable
+except ImportError:
+    from collections.abc import MutableMapping
+    from collections.abc import Iterable
+
 _FRAME23_FORMAT_COMPRESSED = 0x0080
 _FRAME23_FORMAT_ENCRYPTED = 0x0040
 _FRAME23_FORMAT_GROUP = 0x0020
@@ -219,7 +226,7 @@ class FrameOrder:
         return "<FrameOrder: {0}>".format(", ".join(pair[0] for pair in order))
         
 
-class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
+class Tag(MutableMapping, metaclass=abc.ABCMeta):
     known_frames = { }        # Maps known frameids to Frame class objects
 
     frame_order = None        # Initialized by stagger.id3
@@ -316,7 +323,7 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
             self._frames[key] = [value]
             return
         if self.known_frames[key]._allow_duplicates:
-            if not isinstance(value, collections.Iterable) or isinstance(value, str):
+            if not isinstance(value, Iterable) or isinstance(value, str):
                 raise ValueError("{0} requires a list of frame values".format(key))
             self._frames[key] = [val if isinstance(val, self.known_frames[key])
                                  else self.known_frames[key](val) 
@@ -484,8 +491,8 @@ class Tag(collections.MutableMapping, metaclass=abc.ABCMeta):
         try:
             time = self.__friendly_text_collect(timeframe)[0]
             m = re.match(r"\s*(?P<hour>[0-2][0-9])\s*:?\s*"
-                         "(?P<minute>[0-5][0-9])\s*:?\s*"
-                         "(?P<second>[0-5][0-9])?\s*$", time)
+                         r"(?P<minute>[0-5][0-9])\s*:?\s*"
+                         r"(?P<second>[0-5][0-9])?\s*$", time)
             if m is not None:
                 hour = int(m.group("hour"))
                 minute = int(m.group("minute"))

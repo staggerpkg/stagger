@@ -39,6 +39,13 @@ from warnings import warn
 from stagger.conversion import *
 from stagger.errors import *
 
+try:
+    from collections import ByteString
+    from collections import Sequence
+except ImportError:
+    from collections.abc import ByteString
+    from collections.abc import Sequence
+
 # The idea for the Spec system comes from Mutagen.
 
 def optionalspec(spec):
@@ -228,7 +235,7 @@ class BinaryDataSpec(Spec):
     def validate(self, frame, value):
         if value is None:
             return bytes()
-        if not isinstance(value, collections.ByteString):
+        if not isinstance(value, ByteString):
             raise TypeError("Not a byte sequence")
         return value
     def to_str(self, value):
@@ -423,7 +430,7 @@ class MultiSpec(Spec):
             return []
         res = []
         for v in values:
-            if not isinstance(v, collections.Sequence) or isinstance(v, str):
+            if not isinstance(v, Sequence) or isinstance(v, str):
                 raise TypeError("Records must be sequences")
             if len(v) != len(self.specs):
                 raise ValueError("Invalid record length")
@@ -453,7 +460,7 @@ class ASPISpec(Spec):
     def validate(self, frame, values):
         if values is None:
             return []
-        if not isinstance(values, collections.Sequence) or isinstance(values, str):
+        if not isinstance(values, Sequence) or isinstance(values, str):
             raise TypeError("ASPISpec needs a sequence of integers")
         if len(values) != frame.N:
             raise ValueError("ASPISpec needs {0} integers".format(frame.N))
